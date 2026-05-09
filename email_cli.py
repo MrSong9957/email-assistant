@@ -404,9 +404,20 @@ async def send_email(config, to, subject, body, in_reply_to=None, references=Non
 # ── CLI Commands ────────────────────────────────
 
 def cmd_fetch(args):
+    import datetime
+
+    since = args.since
+    if args.days is not None:
+        if since:
+            print("Error: --days and --since cannot be used together", file=sys.stderr)
+            sys.exit(1)
+        since = (datetime.date.today() - datetime.timedelta(days=args.days)).isoformat()
+
     config = get_config()
-    result = asyncio.run(fetch_emails(config, limit=args.limit, folder=args.folder))
-    print(result)
+    emails = asyncio.run(fetch_emails(config, limit=args.limit, folder=args.folder))
+    filtered = filter_emails(emails, since=since, before=args.before,
+                             from_addr=args.from_addr, subject=args.subject)
+    print(format_emails(filtered))
 
 
 def cmd_reply(args):
@@ -476,6 +487,11 @@ def main():
     p = sub.add_parser("fetch", help="Fetch unread emails")
     p.add_argument("--limit", type=int, default=10)
     p.add_argument("--folder", default="INBOX")
+    p.add_argument("--since", default=None, help="Start date inclusive (YYYY-MM-DD)")
+    p.add_argument("--before", default=None, help="End date exclusive (YYYY-MM-DD)")
+    p.add_argument("--days", type=int, default=None, help="Last N days")
+    p.add_argument("--from", dest="from_addr", default=None, help="Sender substring match")
+    p.add_argument("--subject", default=None, help="Subject substring match")
     p.set_defaults(func=cmd_fetch)
 
     p = sub.add_parser("reply", help="Reply to an email by UID")

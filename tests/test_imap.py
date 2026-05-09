@@ -247,6 +247,16 @@ class TestFilterEmails:
         assert len(result2) == 1
 
 
+class TestCmdFetchWithFilters:
+    def test_days_and_since_mutually_exclusive(self):
+        import subprocess
+        result = subprocess.run(
+            ["python", "email_cli.py", "fetch", "--days", "7", "--since", "2026-05-01"],
+            capture_output=True, text=True, cwd=os.path.join(os.path.dirname(__file__), "..")
+        )
+        assert result.returncode != 0
+
+
 class TestFormatEmails:
     def test_formats_list_with_reindexed_headers(self):
         from email_cli import format_emails
