@@ -26,7 +26,7 @@ def _make_raw_email(subject="Test", from_addr="alice@test.com", body="Hello"):
 
 class TestFetchEmails:
     @pytest.mark.asyncio
-    async def test_returns_markdown_with_emails(self):
+    async def test_returns_list_of_emails(self):
         raw1 = _make_raw_email(subject="Sub1", body="Body1")
         raw2 = _make_raw_email(subject="Sub2", body="Body2")
 
@@ -44,11 +44,13 @@ class TestFetchEmails:
         with patch("email_cli.aioimaplib.IMAP4_SSL", return_value=mock_client):
             result = await fetch_emails(make_config(), limit=10)
 
-        assert "未读邮件" in result
-        assert "Sub1" in result
-        assert "Sub2" in result
-        assert "UID: 100" in result
-        assert "UID: 200" in result
+        assert len(result) == 2
+        uid1, msg1 = result[0]
+        uid2, msg2 = result[1]
+        assert uid1 == "100"
+        assert uid2 == "200"
+        assert "Sub1" in msg1["Subject"]
+        assert "Sub2" in msg2["Subject"]
 
     @pytest.mark.asyncio
     async def test_returns_empty_when_no_unseen(self):
@@ -62,7 +64,7 @@ class TestFetchEmails:
         with patch("email_cli.aioimaplib.IMAP4_SSL", return_value=mock_client):
             result = await fetch_emails(make_config())
 
-        assert "0封" in result
+        assert result == []
 
     @pytest.mark.asyncio
     async def test_respects_limit(self):
@@ -82,7 +84,7 @@ class TestFetchEmails:
         with patch("email_cli.aioimaplib.IMAP4_SSL", return_value=mock_client):
             result = await fetch_emails(make_config(), limit=3)
 
-        assert "3封" in result
+        assert len(result) == 3
 
 
 class TestListFolders:

@@ -173,19 +173,19 @@ def format_email(index, uid, msg):
 # ── IMAP Operations ──────────────────────────────
 
 async def fetch_emails(config, limit=10, folder="INBOX"):
-    """Fetch unread emails and return as Markdown."""
+    """Fetch unread emails and return list of (uid, msg) tuples."""
     try:
         async with imap_client(config) as client:
             await client.select(folder)
             status, data = await client.search("UNSEEN")
             if status != "OK" or not data[0].strip():
-                return "# 未读邮件 (0封)\n"
+                return []
 
             seqs = data[0].split()
             seqs = seqs[-limit:]
 
             results = []
-            for i, seq_bytes in enumerate(seqs, 1):
+            for seq_bytes in seqs:
                 seq_str = seq_bytes.decode()
                 status, msg_data = await client.fetch(seq_str, "(UID BODY.PEEK[])")
                 if status != "OK":
@@ -204,10 +204,9 @@ async def fetch_emails(config, limit=10, folder="INBOX"):
                 if raw_email is None:
                     continue
                 msg = email_lib.message_from_bytes(raw_email)
-                results.append(format_email(i, uid_str, msg))
+                results.append((uid_str, msg))
 
-            header = f"# 未读邮件 ({len(results)}封)\n\n"
-            return header + "\n\n---\n\n".join(results)
+            return results
     except SystemExit:
         raise
     except Exception as e:
