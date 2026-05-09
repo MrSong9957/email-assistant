@@ -91,8 +91,8 @@ pip install -r ~/.claude/skills/email-assistant/requirements.txt
 - **2026-05-09** 邮件分类简化：删除"待处理"分类，只保留"需要关注"和"订阅/通知"两级
 - **2026-05-09** 标记已读功能：fetch 改用 `BODY.PEEK[]` 避免自动标记，新增 `mark-read` 命令，汇报后询问标记、回复/转发后自动标记
 - **2026-05-09** 修复 5 个失败测试：`TestFetchEmails` mock 从 `uid` 改为 `search`、fetch 数据格式从 tuple 改为 bytes；`TestGetConfig` 隔离 `_load_dotenv` 防止 `.env` 回填
+- **2026-05-09** 邮件筛选：`fetch` 新增 `--since`/`--before`/`--days`/`--from`/`--subject` 客户端过滤，SKILL.md 新增自然语言映射指南
 
 ### 待办
 
-- 按范围/日期筛选邮件（如 `--since 2026-05-01`）
 - 支持多邮箱账户
