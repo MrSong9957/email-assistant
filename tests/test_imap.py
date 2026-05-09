@@ -176,3 +176,101 @@ class TestMarkReadUids:
         assert calls[0] == call("store", "100", "+FLAGS", "\\Seen")
         assert calls[1] == call("store", "200", "+FLAGS", "\\Seen")
         assert calls[2] == call("store", "300", "+FLAGS", "\\Seen")
+
+
+class TestFilterEmails:
+    def _make_email_data(self, subject="Test", from_addr="alice@test.com",
+                         date="Fri, 09 May 2026 14:30:00 +0800"):
+        msg = EmailMessage()
+        msg["From"] = from_addr
+        msg["Subject"] = subject
+        msg["Date"] = date
+        msg.set_content("body")
+        return ("100", msg)
+
+    def test_no_filters_returns_all(self):
+        from email_cli import filter_emails
+        emails = [self._make_email_data(), self._make_email_data()]
+        result = filter_emails(emails)
+        assert len(result) == 2
+
+    def test_since_date(self):
+        from email_cli import filter_emails
+        emails = [
+            self._make_email_data(date="Thu, 01 May 2026 10:00:00 +0800"),
+            self._make_email_data(date="Fri, 09 May 2026 14:30:00 +0800"),
+        ]
+        result = filter_emails(emails, since="2026-05-08")
+        assert len(result) == 1
+
+    def test_before_date(self):
+        from email_cli import filter_emails
+        emails = [
+            self._make_email_data(date="Thu, 01 May 2026 10:00:00 +0800"),
+            self._make_email_data(date="Fri, 09 May 2026 14:30:00 +0800"),
+        ]
+        result = filter_emails(emails, before="2026-05-09")
+        assert len(result) == 1
+
+    def test_from_filter_case_insensitive(self):
+        from email_cli import filter_emails
+        emails = [
+            self._make_email_data(from_addr="Zhang San <zhangsan@qq.com>"),
+            self._make_email_data(from_addr="Li Si <lisi@qq.com>"),
+        ]
+        result = filter_emails(emails, from_addr="zhang")
+        assert len(result) == 1
+
+    def test_subject_filter_substring(self):
+        from email_cli import filter_emails
+        emails = [
+            self._make_email_data(subject="周报提醒"),
+            self._make_email_data(subject="会议通知"),
+        ]
+        result = filter_emails(emails, subject="周报")
+        assert len(result) == 1
+
+    def test_combined_filters(self):
+        from email_cli import filter_emails
+        emails = [
+            self._make_email_data(subject="报告", from_addr="boss@co.com",
+                                  date="Mon, 05 May 2026 10:00:00 +0800"),
+            self._make_email_data(subject="报告", from_addr="hr@co.com",
+                                  date="Thu, 08 May 2026 10:00:00 +0800"),
+            self._make_email_data(subject="闲聊", from_addr="boss@co.com",
+                                  date="Fri, 09 May 2026 10:00:00 +0800"),
+        ]
+        result = filter_emails(emails, since="2026-05-06", from_addr="boss", subject="报告")
+        assert len(result) == 0
+
+        result2 = filter_emails(emails, since="2026-05-04", from_addr="boss", subject="报告")
+        assert len(result2) == 1
+
+
+class TestFormatEmails:
+    def test_formats_list_with_reindexed_headers(self):
+        from email_cli import format_emails
+        msg1 = EmailMessage()
+        msg1["From"] = "a@b.com"
+        msg1["Subject"] = "Hello"
+        msg1["Date"] = "Fri, 09 May 2026 14:30:00 +0800"
+        msg1.set_content("body")
+        msg2 = EmailMessage()
+        msg2["From"] = "c@d.com"
+        msg2["Subject"] = "World"
+        msg2["Date"] = "Fri, 09 May 2026 15:00:00 +0800"
+        msg2.set_content("body2")
+
+        result = format_emails([("100", msg1), ("200", msg2)])
+        assert "未读邮件 (2封)" in result
+        assert "[1]" in result
+        assert "[2]" in result
+        assert "UID: 100" in result
+        assert "UID: 200" in result
+        assert "Hello" in result
+        assert "World" in result
+
+    def test_empty_list(self):
+        from email_cli import format_emails
+        result = format_emails([])
+        assert "0封" in result

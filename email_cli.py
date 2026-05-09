@@ -172,6 +172,60 @@ def format_email(index, uid, msg):
 
 # ── IMAP Operations ──────────────────────────────
 
+def _parse_email_date(msg):
+    """Parse email Date header to datetime.date. Returns None on failure."""
+    from email.utils import parsedate_to_datetime
+    date_str = msg.get("Date", "")
+    try:
+        return parsedate_to_datetime(date_str).date()
+    except Exception:
+        return None
+
+
+def filter_emails(emails, since=None, before=None, from_addr=None, subject=None):
+    """Filter list of (uid, msg) tuples by date/sender/subject criteria."""
+    import datetime
+
+    since_date = None
+    if since:
+        since_date = datetime.date.fromisoformat(since)
+    before_date = None
+    if before:
+        before_date = datetime.date.fromisoformat(before)
+
+    filtered = []
+    for uid, msg in emails:
+        if since_date or before_date:
+            email_date = _parse_email_date(msg)
+            if email_date is None:
+                continue
+            if since_date and email_date < since_date:
+                continue
+            if before_date and email_date >= before_date:
+                continue
+        if from_addr:
+            sender = msg.get("From", "").lower()
+            if from_addr.lower() not in sender:
+                continue
+        if subject:
+            subj = msg.get("Subject", "").lower()
+            if subject.lower() not in subj:
+                continue
+        filtered.append((uid, msg))
+    return filtered
+
+
+def format_emails(emails):
+    """Format list of (uid, msg) tuples as Markdown with reindexed headers."""
+    if not emails:
+        return "# 未读邮件 (0封)\n"
+    parts = []
+    for i, (uid, msg) in enumerate(emails, 1):
+        parts.append(format_email(i, uid, msg))
+    header = f"# 未读邮件 ({len(emails)}封)\n\n"
+    return header + "\n\n---\n\n".join(parts)
+
+
 async def fetch_emails(config, limit=10, folder="INBOX"):
     """Fetch unread emails and return list of (uid, msg) tuples."""
     try:
