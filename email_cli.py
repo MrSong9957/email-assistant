@@ -2,12 +2,14 @@
 
 import argparse
 import asyncio
+import datetime
 import email as email_lib
 import os
 import re
 import sys
 from contextlib import asynccontextmanager
 from email.header import decode_header
+from email.utils import parsedate_to_datetime
 from email.mime.text import MIMEText
 
 import aioimaplib
@@ -174,7 +176,6 @@ def format_email(index, uid, msg):
 
 def _parse_email_date(msg):
     """Parse email Date header to datetime.date. Returns None on failure."""
-    from email.utils import parsedate_to_datetime
     date_str = msg.get("Date", "")
     try:
         return parsedate_to_datetime(date_str).date()
@@ -184,8 +185,6 @@ def _parse_email_date(msg):
 
 def filter_emails(emails, since=None, before=None, from_addr=None, subject=None):
     """Filter list of (uid, msg) tuples by date/sender/subject criteria."""
-    import datetime
-
     since_date = None
     if since:
         since_date = datetime.date.fromisoformat(since)
@@ -404,14 +403,20 @@ async def send_email(config, to, subject, body, in_reply_to=None, references=Non
 # ── CLI Commands ────────────────────────────────
 
 def cmd_fetch(args):
-    import datetime
-
     since = args.since
     if args.days is not None:
         if since:
             print("Error: --days and --since cannot be used together", file=sys.stderr)
             sys.exit(1)
         since = (datetime.date.today() - datetime.timedelta(days=args.days)).isoformat()
+
+    for label, val in [("--since", since), ("--before", args.before)]:
+        if val:
+            try:
+                datetime.date.fromisoformat(val)
+            except ValueError:
+                print(f"Error: invalid date format '{val}', expected YYYY-MM-DD", file=sys.stderr)
+                sys.exit(1)
 
     config = get_config()
     emails = asyncio.run(fetch_emails(config, limit=args.limit, folder=args.folder))
