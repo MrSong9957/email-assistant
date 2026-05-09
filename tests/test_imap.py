@@ -230,6 +230,27 @@ class TestFilterEmails:
         result = filter_emails(emails, subject="周报")
         assert len(result) == 1
 
+    def test_no_date_header_skipped_when_date_filter_active(self):
+        from email_cli import filter_emails
+        msg = EmailMessage()
+        msg["From"] = "a@b.com"
+        msg["Subject"] = "No Date"
+        msg.set_content("body")
+        emails = [("1", msg)]
+        assert filter_emails(emails, since="2026-05-01") == []
+
+    def test_since_date_inclusive_boundary(self):
+        from email_cli import filter_emails
+        emails = [self._make_email_data(date="Thu, 08 May 2026 00:00:00 +0800")]
+        result = filter_emails(emails, since="2026-05-08")
+        assert len(result) == 1
+
+    def test_before_date_exclusive_boundary(self):
+        from email_cli import filter_emails
+        emails = [self._make_email_data(date="Thu, 08 May 2026 00:00:00 +0800")]
+        result = filter_emails(emails, before="2026-05-08")
+        assert len(result) == 0
+
     def test_combined_filters(self):
         from email_cli import filter_emails
         emails = [
@@ -284,3 +305,17 @@ class TestFormatEmails:
         from email_cli import format_emails
         result = format_emails([])
         assert "0封" in result
+
+    def test_single_email(self):
+        from email_cli import format_emails
+        msg = EmailMessage()
+        msg["From"] = "a@b.com"
+        msg["Subject"] = "Solo"
+        msg["Date"] = "Fri, 09 May 2026 14:30:00 +0800"
+        msg.set_content("body")
+
+        result = format_emails([("50", msg)])
+        assert "未读邮件 (1封)" in result
+        assert "[1]" in result
+        assert "UID: 50" in result
+        assert "---" not in result
