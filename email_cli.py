@@ -1,0 +1,462 @@
+"""QQ Mail CLI for Claude Code email-assistant skill."""
+
+import argparse
+import asyncio
+import email as email_lib
+import os
+import re
+import sys
+from contextlib import asynccontextmanager
+from email.header import decode_header
+from email.mime.text import MIMEText
+
+import aioimaplib
+import aiosmtplib
+
+
+# ── Config ──────────────────────────────────────
+
+def _load_dotenv():
+    """Load .env from the directory containing this script. Does not override existing env vars."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.isfile(env_path):
+        return
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key, value = key.strip(), value.strip().strip("'\"")
+            os.environ.setdefault(key, value)
+
+
+def get_config():
+    """Read email configuration from environment variables."""
+    _load_dotenv()
+    user = os.environ.get("QQ_MAIL_USER", "")
+    password = os.environ.get("QQ_MAIL_APP_PASSWORD", "")
+    if not user or not password:
+        print(
+            "Error: QQ_MAIL_USER and QQ_MAIL_APP_PASSWORD required.\n"
+            "Get app password: QQ Mail → Settings → Account → IMAP/SMTP → Generate code",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return {
+        "user": user,
+        "password": password,
+        "imap_host": os.environ.get("QQ_MAIL_IMAP_HOST", "imap.qq.com"),
+        "imap_port": int(os.environ.get("QQ_MAIL_IMAP_PORT", "993")),
+        "smtp_host": os.environ.get("QQ_MAIL_SMTP_HOST", "smtp.qq.com"),
+        "smtp_port": int(os.environ.get("QQ_MAIL_SMTP_PORT", "465")),
+        "archive_folder": os.environ.get("QQ_MAIL_ARCHIVE_FOLDER", "Archives"),
+    }
+
+
+@asynccontextmanager
+async def imap_client(config):
+    """Async context manager for IMAP connection."""
+    client = aioimaplib.IMAP4_SSL(config["imap_host"], config["imap_port"])
+    try:
+        await client.wait_hello_from_server()
+        await client.login(config["user"], config["password"])
+        yield client
+    except Exception as e:
+        print(f"IMAP connection error: {e}", file=sys.stderr)
+        sys.exit(2)
+    finally:
+        try:
+            await client.logout()
+        except Exception:
+            pass
+
+
+def decode_mime(value):
+    """Decode MIME-encoded header value to readable string."""
+    if not value:
+        return ""
+    decoded_parts = decode_header(value)
+    result = []
+    for part, charset in decoded_parts:
+        if isinstance(part, bytes):
+            result.append(part.decode(charset or "utf-8", errors="replace"))
+        else:
+            result.append(part)
+    return "".join(result)
+
+
+def strip_html(text):
+    """Remove HTML tags and decode entities."""
+    text = re.sub(r"<br\s*/?>", "\n", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    import html as html_mod
+    return html_mod.unescape(text).strip()
+
+
+def extract_body(msg):
+    """Extract readable text from an email message.
+
+    Args:
+        msg: email.message.Message object
+
+    Returns:
+        str: Readable text content of the email
+    """
+    if not msg.is_multipart():
+        payload = msg.get_payload(decode=True)
+        if payload is None:
+            return ""
+        charset = msg.get_content_charset() or "utf-8"
+        text = payload.decode(charset, errors="replace")
+        if msg.get_content_type() == "text/html":
+            return strip_html(text)
+        return text
+    plain = None
+    html = None
+    for part in msg.get_payload():
+        if isinstance(part, str):
+            continue
+        ct = part.get_content_type()
+        if part.is_multipart():
+            sub = extract_body(part)
+            if sub:
+                return sub
+        elif ct == "text/plain" and plain is None:
+            p = part.get_payload(decode=True)
+            if p:
+                plain = p.decode(part.get_content_charset() or "utf-8", errors="replace")
+        elif ct == "text/html" and html is None:
+            p = part.get_payload(decode=True)
+            if p:
+                html = strip_html(p.decode(part.get_content_charset() or "utf-8", errors="replace"))
+    return plain or html or ""
+
+
+def format_email(index, uid, msg):
+    """Format a single email as Markdown."""
+    from_addr = decode_mime(msg.get("From", "Unknown"))
+    subject = decode_mime(msg.get("Subject", "(No Subject)"))
+    date = msg.get("Date", "Unknown")
+
+    lines = [
+        f"## [{index}] UID: {uid} | {date}",
+        f"**From:** {from_addr}",
+        f"**Subject:** {subject}",
+    ]
+
+    attachments = []
+    for part in msg.walk():
+        cd = part.get("Content-Disposition", "")
+        if "attachment" in cd:
+            filename = decode_mime(part.get_filename() or "unnamed")
+            payload = part.get_payload(decode=True)
+            size = len(payload) if payload else 0
+            if size >= 1024 * 1024:
+                size_str = f"{size / 1024 / 1024:.1f}MB"
+            elif size >= 1024:
+                size_str = f"{size / 1024:.1f}KB"
+            else:
+                size_str = f"{size}B"
+            attachments.append(f"{filename} ({size_str})")
+
+    if attachments:
+        lines.append(f"**Attachments:** {', '.join(attachments)}")
+
+    lines.append("")
+    body = extract_body(msg)
+    lines.append(body if body else "(No readable content)")
+
+    return "\n".join(lines)
+
+
+# ── IMAP Operations ──────────────────────────────
+
+async def fetch_emails(config, limit=10, folder="INBOX"):
+    """Fetch unread emails and return as Markdown."""
+    try:
+        async with imap_client(config) as client:
+            await client.select(folder)
+            status, data = await client.search("UNSEEN")
+            if status != "OK" or not data[0].strip():
+                return "# 未读邮件 (0封)\n"
+
+            seqs = data[0].split()
+            seqs = seqs[-limit:]
+
+            results = []
+            for i, seq_bytes in enumerate(seqs, 1):
+                seq_str = seq_bytes.decode()
+                status, msg_data = await client.fetch(seq_str, "(UID BODY.PEEK[])")
+                if status != "OK":
+                    continue
+                uid_str = ""
+                raw_email = None
+                for item in msg_data:
+                    if isinstance(item, (bytes, bytearray)):
+                        text = item if isinstance(item, bytes) else bytes(item)
+                        if b"UID" in text and raw_email is None:
+                            m = re.search(rb"UID (\d+)", text)
+                            if m:
+                                uid_str = m.group(1).decode()
+                        elif b"Received:" in text or b"From:" in text or b"Return-Path:" in text:
+                            raw_email = text
+                if raw_email is None:
+                    continue
+                msg = email_lib.message_from_bytes(raw_email)
+                results.append(format_email(i, uid_str, msg))
+
+            header = f"# 未读邮件 ({len(results)}封)\n\n"
+            return header + "\n\n---\n\n".join(results)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"Error fetching emails: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+async def list_folders(config):
+    """List available IMAP folders. Returns formatted string."""
+    try:
+        async with imap_client(config) as client:
+            status, folders = await client.list()
+            if status != "OK":
+                return "Error listing folders"
+            lines = []
+            for folder in folders:
+                if isinstance(folder, bytes):
+                    lines.append(folder.decode(errors="replace"))
+                else:
+                    lines.append(str(folder))
+            return "\n".join(lines)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"Error listing folders: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+async def archive_uids(config, uids):
+    """Move emails to archive folder."""
+    try:
+        async with imap_client(config) as client:
+            await client.select("INBOX")
+            for uid in uids:
+                try:
+                    await client.uid("move", uid, config["archive_folder"])
+                except Exception:
+                    await client.uid("copy", uid, config["archive_folder"])
+                    await client.uid("store", uid, "+FLAGS", "\\Deleted")
+            await client.expunge()
+            print(f"Archived {len(uids)} email(s)")
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"Error archiving: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+async def mark_read_uids(config, uids):
+    """Mark emails as read by setting \\Seen flag."""
+    try:
+        async with imap_client(config) as client:
+            await client.select("INBOX")
+            for uid in uids:
+                await client.uid("store", uid, "+FLAGS", "\\Seen")
+            print(f"Marked {len(uids)} email(s) as read")
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"Error marking as read: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+async def get_email_headers(config, uid):
+    """Fetch Message-ID and References for threading. Returns (message_id, references)."""
+    try:
+        async with imap_client(config) as client:
+            await client.select("INBOX")
+            status, msg_data = await client.fetch(uid, "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID REFERENCES FROM SUBJECT)])")
+            if status != "OK":
+                print(f"Email UID {uid} not found", file=sys.stderr)
+                sys.exit(3)
+            raw = None
+            for item in msg_data:
+                if isinstance(item, tuple):
+                    raw = item[1]
+                    break
+            if raw is None:
+                print(f"Email UID {uid} not found", file=sys.stderr)
+                sys.exit(3)
+            msg = email_lib.message_from_bytes(raw)
+            return msg.get("Message-ID"), msg.get("References")
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"Error fetching email headers: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+async def get_email_full(config, uid):
+    """Fetch full email by UID. Returns email.message.Message or exits."""
+    try:
+        async with imap_client(config) as client:
+            await client.select("INBOX")
+            status, msg_data = await client.fetch(uid, "(RFC822)")
+            if status != "OK":
+                print(f"Email UID {uid} not found", file=sys.stderr)
+                sys.exit(3)
+            raw = None
+            for item in msg_data:
+                if isinstance(item, tuple):
+                    raw = item[1]
+                    break
+            if raw is None:
+                print(f"Email UID {uid} not found", file=sys.stderr)
+                sys.exit(3)
+            return email_lib.message_from_bytes(raw)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"Error fetching email: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+async def send_email(config, to, subject, body, in_reply_to=None, references=None):
+    """Send email via SMTP."""
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["From"] = config["user"]
+    msg["To"] = to
+    msg["Subject"] = subject
+    if in_reply_to:
+        msg["In-Reply-To"] = in_reply_to
+    if references:
+        msg["References"] = references
+
+    try:
+        await aiosmtplib.send(
+            msg,
+            hostname=config["smtp_host"],
+            port=config["smtp_port"],
+            username=config["user"],
+            password=config["password"],
+            use_tls=True,
+        )
+        print(f"Sent to {to}")
+    except Exception as e:
+        print(f"Error sending email: {e}", file=sys.stderr)
+        sys.exit(4)
+
+
+# ── CLI Commands ────────────────────────────────
+
+def cmd_fetch(args):
+    config = get_config()
+    result = asyncio.run(fetch_emails(config, limit=args.limit, folder=args.folder))
+    print(result)
+
+
+def cmd_reply(args):
+    config = get_config()
+    orig = asyncio.run(get_email_full(config, args.uid))
+    msg_id = orig.get("Message-ID")
+    refs = orig.get("References")
+    from_addr = orig.get("Reply-To") or orig.get("From", "")
+    subject = decode_mime(orig.get("Subject", ""))
+    if not subject.lower().startswith("re:"):
+        subject = f"Re: {subject}"
+
+    asyncio.run(send_email(
+        config,
+        to=args.to or from_addr,
+        subject=subject,
+        body=args.body,
+        in_reply_to=msg_id,
+        references=refs,
+    ))
+
+
+def cmd_forward(args):
+    config = get_config()
+    orig = asyncio.run(get_email_full(config, args.uid))
+    subject = decode_mime(orig.get("Subject", ""))
+    if not subject.lower().startswith("fwd:"):
+        subject = f"Fwd: {subject}"
+    orig_body = extract_body(orig)
+    fwd_body = f"{args.note}\n\n---------- Forwarded message ----------\n{orig_body}" if args.note else f"---------- Forwarded message ----------\n{orig_body}"
+
+    asyncio.run(send_email(
+        config,
+        to=args.to,
+        subject=subject,
+        body=fwd_body,
+    ))
+
+
+def cmd_send(args):
+    config = get_config()
+    asyncio.run(send_email(config, to=args.to, subject=args.subject, body=args.body))
+
+
+def cmd_archive(args):
+    config = get_config()
+    uids = [u.strip() for u in args.uid.split(",")]
+    asyncio.run(archive_uids(config, uids))
+
+
+def cmd_folders(args):
+    config = get_config()
+    result = asyncio.run(list_folders(config))
+    print(result)
+
+
+def cmd_mark_read(args):
+    config = get_config()
+    uids = [u.strip() for u in args.uid.split(",")]
+    asyncio.run(mark_read_uids(config, uids))
+
+
+def main():
+    parser = argparse.ArgumentParser(description="QQ Mail CLI")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("fetch", help="Fetch unread emails")
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--folder", default="INBOX")
+    p.set_defaults(func=cmd_fetch)
+
+    p = sub.add_parser("reply", help="Reply to an email by UID")
+    p.add_argument("--uid", required=True, help="UID of the email to reply to")
+    p.add_argument("--body", required=True, help="Reply body text")
+    p.add_argument("--to", default=None, help="Override recipient (default: reply to sender)")
+    p.set_defaults(func=cmd_reply)
+
+    p = sub.add_parser("forward", help="Forward an email by UID")
+    p.add_argument("--uid", required=True, help="UID of the email to forward")
+    p.add_argument("--to", required=True, help="Forward recipient")
+    p.add_argument("--note", default="", help="Optional note to prepend")
+    p.set_defaults(func=cmd_forward)
+
+    p = sub.add_parser("send", help="Send a new email")
+    p.add_argument("--to", required=True)
+    p.add_argument("--subject", required=True)
+    p.add_argument("--body", required=True)
+    p.set_defaults(func=cmd_send)
+
+    p = sub.add_parser("archive", help="Archive emails by UID")
+    p.add_argument("--uid", required=True, help="Comma-separated UIDs")
+    p.set_defaults(func=cmd_archive)
+
+    p = sub.add_parser("folders", help="List IMAP folders")
+    p.set_defaults(func=cmd_folders)
+
+    p = sub.add_parser("mark-read", help="Mark emails as read")
+    p.add_argument("--uid", required=True, help="Comma-separated UIDs")
+    p.set_defaults(func=cmd_mark_read)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

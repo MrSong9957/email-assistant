@@ -1,0 +1,6 @@
+# Docker environment (contains API keys)
+docker/.env
+.env
+
+__pycache__/
+.pytest_cache/
