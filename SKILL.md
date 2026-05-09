@@ -39,6 +39,25 @@ QQ_MAIL_APP_PASSWORD=你的授权码
 python ~/.claude/skills/email-assistant/email_cli.py fetch [--limit 10] [--folder INBOX]
 ```
 
+**筛选邮件**
+
+支持通过自然语言按日期、发件人、主题筛选。翻译规则：
+
+| 用户说 | 参数 |
+|--------|------|
+| "最近 N 天的邮件" | `--days N` |
+| "5月1日以来的邮件" | `--since 2026-05-01` |
+| "5月1日到5日的邮件" | `--since 2026-05-01 --before 2026-05-06` |
+| "张三发的邮件" | `--from 张三` |
+| "关于报告的邮件" | `--subject 报告` |
+| 组合使用 | 参数自由组合，如 `--days 7 --from 张三 --subject 报告` |
+
+示例：
+```bash
+python ~/.claude/skills/email-assistant/email_cli.py fetch --days 7
+python ~/.claude/skills/email-assistant/email_cli.py fetch --since 2026-05-01 --from 张三
+```
+
 **第二步：分析分类（内部完成，不输出原始内容）**
 
 根据邮件内容进行分类：
