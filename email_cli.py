@@ -10,6 +10,7 @@ import sys
 from contextlib import asynccontextmanager
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 import aioimaplib
@@ -95,6 +96,31 @@ def strip_html(text):
     text = re.sub(r"<[^>]+>", "", text)
     import html as html_mod
     return html_mod.unescape(text).strip()
+
+
+def extract_html_body(msg):
+    """Extract HTML body from email. Returns empty string if no HTML part."""
+    if not msg.is_multipart():
+        if msg.get_content_type() == "text/html":
+            payload = msg.get_payload(decode=True)
+            if payload is None:
+                return ""
+            charset = msg.get_content_charset() or "utf-8"
+            return payload.decode(charset, errors="replace")
+        return ""
+    for part in msg.get_payload():
+        if isinstance(part, str):
+            continue
+        if part.is_multipart():
+            sub = extract_html_body(part)
+            if sub:
+                return sub
+        elif part.get_content_type() == "text/html":
+            p = part.get_payload(decode=True)
+            if p:
+                charset = part.get_content_charset() or "utf-8"
+                return p.decode(charset, errors="replace")
+    return ""
 
 
 def extract_body(msg):
@@ -388,9 +414,14 @@ async def get_email_full(config, uid):
         sys.exit(2)
 
 
-async def send_email(config, to, subject, body, in_reply_to=None, references=None):
-    """Send email via SMTP."""
-    msg = MIMEText(body, "plain", "utf-8")
+async def send_email(config, to, subject, body, in_reply_to=None, references=None, html_body=None):
+    """Send email via SMTP. If html_body is provided, sends multipart/alternative."""
+    if html_body:
+        msg = MIMEMultipart("alternative")
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
+    else:
+        msg = MIMEText(body, "plain", "utf-8")
     msg["From"] = config["user"]
     msg["To"] = to
     msg["Subject"] = subject
@@ -466,14 +497,34 @@ def cmd_forward(args):
     subject = decode_mime(orig.get("Subject", ""))
     if not subject.lower().startswith("fwd:"):
         subject = f"Fwd: {subject}"
+
+    from_addr = decode_mime(orig.get("From", ""))
+    date_str = orig.get("Date", "")
+    orig_subject = decode_mime(orig.get("Subject", ""))
+    fwd_header_plain = f"---------- Forwarded message ----------\nFrom: {from_addr}\nDate: {date_str}\nSubject: {orig_subject}\n"
+    fwd_header_html = (
+        '<div style="border-left: 2px solid #ccc; padding-left: 8px; margin-left: 4px;">'
+        f'<br><b>From:</b> {from_addr}<br><b>Date:</b> {date_str}<br><b>Subject:</b> {orig_subject}<br><br>'
+    )
+
     orig_body = extract_body(orig)
-    fwd_body = f"{args.note}\n\n---------- Forwarded message ----------\n{orig_body}" if args.note else f"---------- Forwarded message ----------\n{orig_body}"
+    orig_html = extract_html_body(orig)
+
+    note_prefix = f"{args.note}\n\n" if args.note else ""
+    note_html = f"<p>{args.note}</p><br>" if args.note else ""
+
+    plain = f"{note_prefix}{fwd_header_plain}\n{orig_body}"
+
+    html = None
+    if orig_html:
+        html = f"{note_html}{fwd_header_html}{orig_html}</div>"
 
     asyncio.run(send_email(
         config,
         to=args.to,
         subject=subject,
-        body=fwd_body,
+        body=plain,
+        html_body=html,
     ))
 
 

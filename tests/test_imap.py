@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
 from conftest import make_config
-from email_cli import fetch_emails, list_folders, archive_uids, mark_read_uids
+from email_cli import fetch_emails, list_folders, archive_uids, mark_read_uids, extract_html_body
 
 import pytest
 
@@ -394,6 +394,37 @@ class TestPostSendVerification:
         assert "Fresh content." in out
         # Verify [1] index — the sent email appears first
         assert "[1]" in out
+
+
+class TestExtractHtmlBody:
+    def _make_html_email(self, html_content, plain_content=None):
+        """Create a multipart email with HTML and optional plain text."""
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        msg = MIMEMultipart("alternative")
+        msg["From"] = "alice@test.com"
+        msg["Subject"] = "HTML Test"
+        msg["Date"] = "Fri, 09 May 2026 14:30:00 +0800"
+        if plain_content:
+            msg.attach(MIMEText(plain_content, "plain", "utf-8"))
+        msg.attach(MIMEText(html_content, "html", "utf-8"))
+        return msg
+
+    def test_extracts_html_from_multipart(self):
+        msg = self._make_html_email("<b>Bold</b>", "plain text")
+        assert extract_html_body(msg) == "<b>Bold</b>"
+
+    def test_returns_empty_when_no_html(self):
+        msg = EmailMessage()
+        msg["Subject"] = "Plain only"
+        msg.set_content("just text")
+        assert extract_html_body(msg) == ""
+
+    def test_extracts_html_from_html_only_email(self):
+        msg = EmailMessage()
+        msg["Subject"] = "HTML only"
+        msg.add_alternative("<p>hello</p>", subtype="html")
+        assert extract_html_body(msg).strip() == "<p>hello</p>"
 
 
 class TestCmdFetchWithFilters:
