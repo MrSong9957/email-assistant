@@ -4,3 +4,9 @@ docker/.env
 
 __pycache__/
 .pytest_cache/
+
+# Development process artifacts
+docs/superpowers/
+
+# Local Claude settings
+.claude/
