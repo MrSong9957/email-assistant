@@ -12,6 +12,7 @@ def make_config(**overrides):
         "smtp_host": "smtp.qq.com",
         "smtp_port": 465,
         "archive_folder": "Archives",
+        "sent_folder": "Sent Messages",
     }
     base.update(overrides)
     return base

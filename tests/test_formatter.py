@@ -9,7 +9,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 
-from email_cli import format_email
+from email_cli import format_email, format_emails
 
 
 def _make_email(subject="Test", from_addr="Alice <alice@example.com>",
@@ -71,3 +71,41 @@ class TestFormatEmail:
         msg = _make_email()
         result = format_email(1, "1", msg)
         assert "Attachments" not in result
+
+    def test_sent_mode_shows_to(self):
+        msg = _make_email()
+        msg["To"] = "bob@example.com"
+        result = format_email(1, "100", msg, sent=True)
+        assert "To:" in result
+        assert "bob@example.com" in result
+        assert "From:" not in result
+
+    def test_sent_mode_default_shows_from(self):
+        msg = _make_email()
+        result = format_email(1, "100", msg, sent=False)
+        assert "From:" in result
+        assert "To:" not in result
+
+
+class TestFormatEmailsSentMode:
+    def test_sent_header(self):
+        msg = EmailMessage()
+        msg["From"] = "me@qq.com"
+        msg["To"] = "bob@example.com"
+        msg["Subject"] = "Hello"
+        msg["Date"] = "Fri, 09 May 2026 14:30:00 +0800"
+        msg.set_content("body")
+
+        result = format_emails([("100", msg)], sent=True)
+        assert "已发送邮件 (1封)" in result
+        assert "To:" in result
+
+    def test_default_header_is_inbox(self):
+        msg = EmailMessage()
+        msg["From"] = "a@b.com"
+        msg["Subject"] = "X"
+        msg["Date"] = "Fri, 09 May 2026 14:30:00 +0800"
+        msg.set_content("body")
+
+        result = format_emails([("1", msg)], sent=False)
+        assert "未读邮件" in result

@@ -87,6 +87,24 @@ class TestFetchEmails:
         assert len(result) == 3
 
 
+    @pytest.mark.asyncio
+    async def test_custom_search_criteria(self):
+        raw = _make_raw_email(subject="Sent1")
+        mock_client = AsyncMock()
+        mock_client.wait_hello_from_server = AsyncMock()
+        mock_client.login = AsyncMock()
+        mock_client.select = AsyncMock()
+        mock_client.search = AsyncMock(return_value=("OK", [b"300"]))
+        mock_client.fetch = AsyncMock(return_value=("OK", [b"3 (UID 300)", raw]))
+        mock_client.logout = AsyncMock()
+
+        with patch("email_cli.aioimaplib.IMAP4_SSL", return_value=mock_client):
+            await fetch_emails(make_config(), limit=5, folder="Sent Messages", search="ALL")
+
+        mock_client.search.assert_called_once_with("ALL")
+        mock_client.select.assert_called_once_with('"Sent Messages"')
+
+
 class TestListFolders:
     @pytest.mark.asyncio
     async def test_lists_folders(self):
@@ -266,6 +284,116 @@ class TestFilterEmails:
 
         result2 = filter_emails(emails, since="2026-05-04", from_addr="boss", subject="报告")
         assert len(result2) == 1
+
+
+class TestCmdSent:
+    def test_uses_all_search_and_sent_folder(self, capsys):
+        msg = EmailMessage()
+        msg["From"] = "me@qq.com"
+        msg["To"] = "bob@example.com"
+        msg["Subject"] = "Test Sent"
+        msg["Date"] = "Fri, 09 May 2026 14:30:00 +0800"
+        msg.set_content("body")
+
+        mock_fetch = AsyncMock(return_value=[("400", msg)])
+        with patch("email_cli.fetch_emails", mock_fetch), \
+             patch("email_cli.get_config", return_value=make_config(sent_folder="Sent Messages")):
+            from email_cli import cmd_sent
+            import argparse
+            args = argparse.Namespace(limit=5, folder=None)
+            cmd_sent(args)
+
+        mock_fetch.assert_called_once_with(
+            make_config(sent_folder="Sent Messages"), limit=5, folder="Sent Messages", search="ALL"
+        )
+        out = capsys.readouterr().out
+        assert "已发送邮件" in out
+        assert "bob@example.com" in out
+
+    def test_folder_override(self):
+        mock_fetch = AsyncMock(return_value=[])
+        with patch("email_cli.fetch_emails", mock_fetch), \
+             patch("email_cli.get_config", return_value=make_config(sent_folder="Sent Messages")):
+            from email_cli import cmd_sent
+            import argparse
+            args = argparse.Namespace(limit=5, folder="Custom")
+            cmd_sent(args)
+
+        mock_fetch.assert_called_once_with(
+            make_config(sent_folder="Sent Messages"), limit=5, folder="Custom", search="ALL"
+        )
+
+
+class TestPostSendVerification:
+    """Integration tests: after reply/forward/send, the sent command returns correct output."""
+
+    def _make_sent_email(self, to="bob@example.com", subject="Re: Test", body="Reply body"):
+        msg = EmailMessage()
+        msg["From"] = "test@qq.com"
+        msg["To"] = to
+        msg["Subject"] = subject
+        msg["Date"] = "Fri, 09 May 2026 15:00:00 +0800"
+        msg.set_content(body)
+        return msg
+
+    def test_reply_then_sent_verification(self, capsys):
+        """Reply succeeds → sent command shows the replied email in sent folder."""
+        sent_msg = self._make_sent_email(subject="Re: Original", body="Agreed!")
+
+        mock_fetch = AsyncMock(return_value=[("500", sent_msg)])
+        with patch("email_cli.fetch_emails", mock_fetch), \
+             patch("email_cli.get_config", return_value=make_config()):
+            from email_cli import cmd_sent
+            import argparse
+            args = argparse.Namespace(limit=5, folder=None)
+            cmd_sent(args)
+
+        out = capsys.readouterr().out
+        assert "已发送邮件" in out
+        assert "bob@example.com" in out
+        assert "Re: Original" in out
+        assert "Agreed!" in out
+
+    def test_forward_then_sent_verification(self, capsys):
+        """Forward succeeds → sent command shows forwarded email."""
+        sent_msg = self._make_sent_email(
+            to="charlie@example.com", subject="Fwd: Report", body="See attached."
+        )
+
+        mock_fetch = AsyncMock(return_value=[("501", sent_msg)])
+        with patch("email_cli.fetch_emails", mock_fetch), \
+             patch("email_cli.get_config", return_value=make_config()):
+            from email_cli import cmd_sent
+            import argparse
+            args = argparse.Namespace(limit=5, folder=None)
+            cmd_sent(args)
+
+        out = capsys.readouterr().out
+        assert "已发送邮件" in out
+        assert "charlie@example.com" in out
+        assert "Fwd: Report" in out
+
+    def test_send_new_then_sent_verification(self, capsys):
+        """Send new email → sent command shows it as first entry."""
+        sent_msg = self._make_sent_email(
+            to="dave@example.com", subject="New Topic", body="Fresh content."
+        )
+
+        mock_fetch = AsyncMock(return_value=[("502", sent_msg)])
+        with patch("email_cli.fetch_emails", mock_fetch), \
+             patch("email_cli.get_config", return_value=make_config()):
+            from email_cli import cmd_sent
+            import argparse
+            args = argparse.Namespace(limit=5, folder=None)
+            cmd_sent(args)
+
+        out = capsys.readouterr().out
+        assert "已发送邮件" in out
+        assert "dave@example.com" in out
+        assert "New Topic" in out
+        assert "Fresh content." in out
+        # Verify [1] index — the sent email appears first
+        assert "[1]" in out
 
 
 class TestCmdFetchWithFilters:

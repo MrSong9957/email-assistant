@@ -8,26 +8,26 @@
 
 遵循 Superpowers 七阶段工作流：
 
-#### 1. 头脑风暴（Brainstorming）
+#### 1. 头脑风暴（Brainstorming）`brainstorming`
 写代码之前，先通过提问细化需求，探索替代方案，分段展示设计供验证。
 
-#### 2. Git Worktree
+#### 2. Git Worktree `using-git-worktrees`
 设计批准后，创建隔离工作空间（新分支），验证测试基线干净。
 
-#### 3. 编写计划（Writing Plans）
+#### 3. 编写计划（Writing Plans）`writing-plans`
 将工作拆分为 2-5 分钟的小任务。每个任务包含：精确文件路径、完整代码、验证步骤。
 
-#### 4. 子代理驱动开发（Subagent-Driven Development）
+#### 4. 子代理驱动开发（Subagent-Driven Development）`subagent-driven-development` / `dispatching-parallel-agents` / `executing-plans`
 每个任务分派独立子代理执行，双阶段审查（规格合规 + 代码质量）。
 
-#### 5. 测试驱动开发（TDD）
+#### 5. 测试驱动开发（TDD）`test-driven-development`
 严格 RED-GREEN-REFACTOR：先写失败测试 → 看它失败 → 写最小代码 → 看它通过 → 提交。
 测试之前写的代码应删除重写。
 
-#### 6. 代码审查（Code Review）
+#### 6. 代码审查（Code Review）`requesting-code-review` / `receiving-code-review`
 任务间进行审查，按严重性报告问题。CRITICAL 级别阻止推进。
 
-#### 7. 完成分支（Finishing Branch）
+#### 7. 完成分支（Finishing Branch）`finishing-a-development-branch` / `verification-before-completion`
 验证测试通过，呈现选项（merge/PR/保留/丢弃），清理 worktree。
 
 ---
@@ -57,7 +57,6 @@
 | verification-before-completion | 声称工作完成/修复/通过 **之前**，必须先运行验证 |
 | requesting-code-review | 完成任务、实现大功能、合并前 |
 | receiving-code-review | 收到代码审查反馈时，先验证再实施 |
-| systematic-debugging | 遇到 bug、测试失败、意外行为时，**先观察再修复** |
 
 #### 收尾阶段
 | 技能 | 触发时机 |
@@ -67,7 +66,9 @@
 #### 其他技能
 | 技能 | 触发时机 |
 |------|---------|
+| using-superpowers | 每次对话开始时，建立技能发现和调用规则 |
 | writing-skills | 创建/编辑技能，或验证技能可用性 |
+| systematic-debugging | 跨阶段：遇到 bug、测试失败、意外行为时，**先观察再修复** |
 
 ---
 
@@ -89,6 +90,31 @@
 1. **TDD 铁律**：没有失败测试，不写生产代码
 2. **调试铁律**：没有根因调查，不实施修复
 3. **验证铁律**：没有运行证据，不声称完成
+
+### 子代理派发规则
+
+子代理无法调用 Skill 工具（不在其工具列表中）。父代理必须预加载技能内容并注入子代理 prompt：
+
+**派发流程：**
+1. 父代理调用 `Skill` 加载所需技能，获取完整内容
+2. 将技能内容用 `---<SKILL_NAME> START---` / `---<SKILL_NAME> END---` 标记包裹
+3. 嵌入子代理 prompt 的开头，附加具体任务指令
+
+**场景映射：**
+- 实现任务 → 父代理加载 `test-driven-development` 技能内容 → 注入 prompt
+- 代码质量审查 → 父代理加载 `requesting-code-review` 技能内容 → 注入 prompt
+- 完成分支 → 父代理加载 `finishing-a-development-branch` 技能内容 → 注入 prompt
+
+**prompt 模板：**
+```
+你是一个遵循 <技能名> 规则的代理。以下是你的技能规则：
+
+---<SKILL_NAME> START---
+（父代理加载的完整技能内容）
+---<SKILL_NAME> END---
+
+（具体任务描述）
+```
 
 ---
 

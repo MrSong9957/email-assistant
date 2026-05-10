@@ -70,14 +70,15 @@ class TestGetEmailHeaders:
         mock_client.wait_hello_from_server = AsyncMock()
         mock_client.login = AsyncMock()
         mock_client.select = AsyncMock()
-        mock_client.fetch = AsyncMock(return_value=(
-            "OK", [(b"1 (RFC822 {size}", raw), b")"]
+        mock_client.uid = AsyncMock(return_value=(
+            "OK", [b"1 (UID 100)", raw, b")"]
         ))
         mock_client.logout = AsyncMock()
 
         with patch("email_cli.aioimaplib.IMAP4_SSL", return_value=mock_client):
             mid, refs = await get_email_headers(make_config(), "100")
 
+        mock_client.uid.assert_called_with("fetch", "100", "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID REFERENCES FROM SUBJECT)])")
         assert mid == "<mid123@test.com>"
         assert refs == "<ref1@test.com>"
 
@@ -87,7 +88,7 @@ class TestGetEmailHeaders:
         mock_client.wait_hello_from_server = AsyncMock()
         mock_client.login = AsyncMock()
         mock_client.select = AsyncMock()
-        mock_client.fetch = AsyncMock(return_value=("OK", []))
+        mock_client.uid = AsyncMock(return_value=("OK", []))
         mock_client.logout = AsyncMock()
 
         with patch("email_cli.aioimaplib.IMAP4_SSL", return_value=mock_client):

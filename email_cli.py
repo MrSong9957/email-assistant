@@ -53,6 +53,7 @@ def get_config():
         "smtp_host": os.environ.get("QQ_MAIL_SMTP_HOST", "smtp.qq.com"),
         "smtp_port": int(os.environ.get("QQ_MAIL_SMTP_PORT", "465")),
         "archive_folder": os.environ.get("QQ_MAIL_ARCHIVE_FOLDER", "Archives"),
+        "sent_folder": os.environ.get("QQ_MAIL_SENT_FOLDER", "Sent Messages"),
     }
 
 
@@ -135,17 +136,23 @@ def extract_body(msg):
     return plain or html or ""
 
 
-def format_email(index, uid, msg):
+def format_email(index, uid, msg, sent=False):
     """Format a single email as Markdown."""
-    from_addr = decode_mime(msg.get("From", "Unknown"))
     subject = decode_mime(msg.get("Subject", "(No Subject)"))
     date = msg.get("Date", "Unknown")
 
     lines = [
         f"## [{index}] UID: {uid} | {date}",
-        f"**From:** {from_addr}",
-        f"**Subject:** {subject}",
     ]
+
+    if sent:
+        to_addr = decode_mime(msg.get("To", "Unknown"))
+        lines.append(f"**To:** {to_addr}")
+    else:
+        from_addr = decode_mime(msg.get("From", "Unknown"))
+        lines.append(f"**From:** {from_addr}")
+
+    lines.append(f"**Subject:** {subject}")
 
     attachments = []
     for part in msg.walk():
@@ -214,23 +221,26 @@ def filter_emails(emails, since=None, before=None, from_addr=None, subject=None)
     return filtered
 
 
-def format_emails(emails):
+def format_emails(emails, sent=False):
     """Format list of (uid, msg) tuples as Markdown with reindexed headers."""
     if not emails:
-        return "# 未读邮件 (0封)\n"
+        title = "已发送邮件" if sent else "未读邮件"
+        return f"# {title} (0封)\n"
     parts = []
     for i, (uid, msg) in enumerate(emails, 1):
-        parts.append(format_email(i, uid, msg))
-    header = f"# 未读邮件 ({len(emails)}封)\n\n"
+        parts.append(format_email(i, uid, msg, sent=sent))
+    title = "已发送邮件" if sent else "未读邮件"
+    header = f"# {title} ({len(emails)}封)\n\n"
     return header + "\n\n---\n\n".join(parts)
 
 
-async def fetch_emails(config, limit=10, folder="INBOX"):
-    """Fetch unread emails and return list of (uid, msg) tuples."""
+async def fetch_emails(config, limit=10, folder="INBOX", search="UNSEEN"):
+    """Fetch emails and return list of (uid, msg) tuples."""
     try:
         async with imap_client(config) as client:
-            await client.select(folder)
-            status, data = await client.search("UNSEEN")
+            selected_folder = f'"{folder}"' if " " in folder else folder
+            await client.select(selected_folder)
+            status, data = await client.search(search)
             if status != "OK" or not data[0].strip():
                 return []
 
@@ -271,7 +281,7 @@ async def list_folders(config):
     """List available IMAP folders. Returns formatted string."""
     try:
         async with imap_client(config) as client:
-            status, folders = await client.list()
+            status, folders = await client.list('""', '"*"')
             if status != "OK":
                 return "Error listing folders"
             lines = []
@@ -328,15 +338,17 @@ async def get_email_headers(config, uid):
     try:
         async with imap_client(config) as client:
             await client.select("INBOX")
-            status, msg_data = await client.fetch(uid, "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID REFERENCES FROM SUBJECT)])")
+            status, msg_data = await client.uid("fetch", uid, "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID REFERENCES FROM SUBJECT)])")
             if status != "OK":
                 print(f"Email UID {uid} not found", file=sys.stderr)
                 sys.exit(3)
             raw = None
             for item in msg_data:
-                if isinstance(item, tuple):
-                    raw = item[1]
-                    break
+                if isinstance(item, (bytes, bytearray)):
+                    text = item if isinstance(item, bytes) else bytes(item)
+                    if b"Message-ID" in text or b"From:" in text:
+                        raw = text
+                        break
             if raw is None:
                 print(f"Email UID {uid} not found", file=sys.stderr)
                 sys.exit(3)
@@ -354,15 +366,17 @@ async def get_email_full(config, uid):
     try:
         async with imap_client(config) as client:
             await client.select("INBOX")
-            status, msg_data = await client.fetch(uid, "(RFC822)")
+            status, msg_data = await client.uid("fetch", uid, "(RFC822)")
             if status != "OK":
                 print(f"Email UID {uid} not found", file=sys.stderr)
                 sys.exit(3)
             raw = None
             for item in msg_data:
-                if isinstance(item, tuple):
-                    raw = item[1]
-                    break
+                if isinstance(item, (bytes, bytearray)):
+                    text = item if isinstance(item, bytes) else bytes(item)
+                    if b"From:" in text or b"Received:" in text or b"Return-Path:" in text:
+                        raw = text
+                        break
             if raw is None:
                 print(f"Email UID {uid} not found", file=sys.stderr)
                 sys.exit(3)
@@ -419,7 +433,8 @@ def cmd_fetch(args):
                 sys.exit(1)
 
     config = get_config()
-    emails = asyncio.run(fetch_emails(config, limit=args.limit, folder=args.folder))
+    limit = 0 if args.fetch_all else args.limit
+    emails = asyncio.run(fetch_emails(config, limit=limit, folder=args.folder))
     filtered = filter_emails(emails, since=since, before=args.before,
                              from_addr=args.from_addr, subject=args.subject)
     print(format_emails(filtered))
@@ -467,6 +482,14 @@ def cmd_send(args):
     asyncio.run(send_email(config, to=args.to, subject=args.subject, body=args.body))
 
 
+def cmd_sent(args):
+    config = get_config()
+    folder = args.folder or config["sent_folder"]
+    emails = asyncio.run(fetch_emails(config, limit=args.limit, folder=folder, search="ALL"))
+    emails.reverse()
+    print(format_emails(emails, sent=True))
+
+
 def cmd_archive(args):
     config = get_config()
     uids = [u.strip() for u in args.uid.split(",")]
@@ -491,6 +514,7 @@ def main():
 
     p = sub.add_parser("fetch", help="Fetch unread emails")
     p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--all", action="store_true", dest="fetch_all", help="Fetch all unread emails (no limit)")
     p.add_argument("--folder", default="INBOX")
     p.add_argument("--since", default=None, help="Start date inclusive (YYYY-MM-DD)")
     p.add_argument("--before", default=None, help="End date exclusive (YYYY-MM-DD)")
@@ -516,6 +540,11 @@ def main():
     p.add_argument("--subject", required=True)
     p.add_argument("--body", required=True)
     p.set_defaults(func=cmd_send)
+
+    p = sub.add_parser("sent", help="List recently sent emails")
+    p.add_argument("--limit", type=int, default=5)
+    p.add_argument("--folder", default=None, help="Override sent folder name")
+    p.set_defaults(func=cmd_sent)
 
     p = sub.add_parser("archive", help="Archive emails by UID")
     p.add_argument("--uid", required=True, help="Comma-separated UIDs")
