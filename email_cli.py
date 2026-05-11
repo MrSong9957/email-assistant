@@ -20,18 +20,22 @@ import aiosmtplib
 # ── Config ──────────────────────────────────────
 
 def _load_dotenv():
-    """Load .env from the directory containing this script. Does not override existing env vars."""
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-    if not os.path.isfile(env_path):
-        return
-    with open(env_path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key, value = key.strip(), value.strip().strip("'\"")
-            os.environ.setdefault(key, value)
+    """Load .env from script directory, then project root as fallback."""
+    env_paths = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"),
+        os.path.join("/home/app/project", ".env"),
+    ]
+    for env_path in env_paths:
+        if not os.path.isfile(env_path):
+            continue
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key, value = key.strip(), value.strip().strip("'\"")
+                os.environ.setdefault(key, value)
 
 
 def get_config():
@@ -83,7 +87,7 @@ def decode_mime(value):
     decoded_parts = decode_header(value)
     result = []
     for part, charset in decoded_parts:
-        if isinstance(part, bytes):
+        if isinstance(part, (bytes, bytearray)):
             result.append(part.decode(charset or "utf-8", errors="replace"))
         else:
             result.append(part)
@@ -283,7 +287,7 @@ async def fetch_emails(config, limit=10, folder="INBOX", search="UNSEEN"):
                 raw_email = None
                 for item in msg_data:
                     if isinstance(item, (bytes, bytearray)):
-                        text = item if isinstance(item, bytes) else bytes(item)
+                        text = bytes(item)
                         if b"UID" in text and raw_email is None:
                             m = re.search(rb"UID (\d+)", text)
                             if m:
@@ -312,7 +316,7 @@ async def list_folders(config):
                 return "Error listing folders"
             lines = []
             for folder in folders:
-                if isinstance(folder, bytes):
+                if isinstance(folder, (bytes, bytearray)):
                     lines.append(folder.decode(errors="replace"))
                 else:
                     lines.append(str(folder))
@@ -371,7 +375,7 @@ async def get_email_headers(config, uid):
             raw = None
             for item in msg_data:
                 if isinstance(item, (bytes, bytearray)):
-                    text = item if isinstance(item, bytes) else bytes(item)
+                    text = bytes(item)
                     if b"Message-ID" in text or b"From:" in text:
                         raw = text
                         break
@@ -399,7 +403,7 @@ async def get_email_full(config, uid):
             raw = None
             for item in msg_data:
                 if isinstance(item, (bytes, bytearray)):
-                    text = item if isinstance(item, bytes) else bytes(item)
+                    text = bytes(item)
                     if b"From:" in text or b"Received:" in text or b"Return-Path:" in text:
                         raw = text
                         break

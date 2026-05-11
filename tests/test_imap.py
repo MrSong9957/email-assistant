@@ -88,6 +88,29 @@ class TestFetchEmails:
 
 
     @pytest.mark.asyncio
+    async def test_fetch_emails_bytearray(self):
+        raw = _make_raw_email(subject="ByteArrayTest", body="BA body")
+
+        mock_client = AsyncMock()
+        mock_client.wait_hello_from_server = AsyncMock()
+        mock_client.login = AsyncMock()
+        mock_client.select = AsyncMock()
+        mock_client.search = AsyncMock(return_value=("OK", [b"100"]))
+        mock_client.fetch = AsyncMock(return_value=(
+            "OK", [bytearray(b"1 (UID 100)"), bytearray(raw)]
+        ))
+        mock_client.logout = AsyncMock()
+
+        with patch("email_cli.aioimaplib.IMAP4_SSL", return_value=mock_client):
+            result = await fetch_emails(make_config(), limit=10)
+
+        assert len(result) == 1
+        uid, msg = result[0]
+        assert uid == "100"
+        assert "ByteArrayTest" in msg["Subject"]
+
+
+    @pytest.mark.asyncio
     async def test_custom_search_criteria(self):
         raw = _make_raw_email(subject="Sent1")
         mock_client = AsyncMock()
@@ -113,6 +136,22 @@ class TestListFolders:
         mock_client.login = AsyncMock()
         mock_client.list = AsyncMock(return_value=(
             "OK", [b'(\\HasNoChildren) "/" "INBOX"', b'(\\HasNoChildren) "/" "Sent"']
+        ))
+        mock_client.logout = AsyncMock()
+
+        with patch("email_cli.aioimaplib.IMAP4_SSL", return_value=mock_client):
+            result = await list_folders(make_config())
+
+        assert "INBOX" in result
+        assert "Sent" in result
+
+    @pytest.mark.asyncio
+    async def test_lists_folders_bytearray(self):
+        mock_client = AsyncMock()
+        mock_client.wait_hello_from_server = AsyncMock()
+        mock_client.login = AsyncMock()
+        mock_client.list = AsyncMock(return_value=(
+            "OK", [bytearray(b'(\\HasNoChildren) "/" "INBOX"'), bytearray(b'(\\HasNoChildren) "/" "Sent"')]
         ))
         mock_client.logout = AsyncMock()
 
