@@ -17,6 +17,30 @@ import aioimaplib
 import aiosmtplib
 
 
+# ── Provider Defaults ────────────────────────────
+
+PROVIDER_DEFAULTS = {
+    "qq": {
+        "env_prefix": "QQ_MAIL",
+        "imap_host": "imap.qq.com",
+        "imap_port": 993,
+        "smtp_host": "smtp.qq.com",
+        "smtp_port": 465,
+        "archive_folder": "Archives",
+        "sent_folder": "Sent Messages",
+    },
+    "gmail": {
+        "env_prefix": "GMAIL",
+        "imap_host": "imap.gmail.com",
+        "imap_port": 993,
+        "smtp_host": "smtp.gmail.com",
+        "smtp_port": 465,
+        "archive_folder": "[Gmail]/All Mail",
+        "sent_folder": "[Gmail]/Sent Mail",
+    },
+}
+
+
 # ── Config ──────────────────────────────────────
 
 def _load_dotenv():
@@ -38,27 +62,65 @@ def _load_dotenv():
                 os.environ.setdefault(key, value)
 
 
-def get_config():
-    """Read email configuration from environment variables."""
+def list_accounts():
+    """List configured email accounts from environment."""
     _load_dotenv()
-    user = os.environ.get("QQ_MAIL_USER", "")
-    password = os.environ.get("QQ_MAIL_APP_PASSWORD", "")
+    raw = os.environ.get("MAIL_ACCOUNTS", "")
+    if raw:
+        names = [n.strip() for n in raw.split(",") if n.strip()]
+    elif os.environ.get("QQ_MAIL_USER"):
+        names = ["qq"]
+    else:
+        names = []
+    accounts = []
+    for name in names:
+        provider = PROVIDER_DEFAULTS.get(name)
+        if not provider:
+            continue
+        user = os.environ.get(f"{provider['env_prefix']}_USER", "")
+        if user:
+            accounts.append({"name": name, "user": user})
+    return accounts
+
+
+def get_config(account=None):
+    """Read email configuration for a specific account."""
+    _load_dotenv()
+    accounts = list_accounts()
+    if not accounts:
+        print("Error: No email accounts configured.", file=sys.stderr)
+        sys.exit(1)
+    if account:
+        matched = [a for a in accounts if a["name"] == account]
+        if not matched:
+            names = ", ".join(a["name"] for a in accounts)
+            print(f"Error: Account '{account}' not found. Available: {names}", file=sys.stderr)
+            sys.exit(1)
+        target = matched[0]
+    else:
+        target = accounts[0]
+    name = target["name"]
+    provider = PROVIDER_DEFAULTS[name]
+    prefix = provider["env_prefix"]
+    user = os.environ.get(f"{prefix}_USER", "")
+    password = os.environ.get(f"{prefix}_APP_PASSWORD", "")
     if not user or not password:
         print(
-            "Error: QQ_MAIL_USER and QQ_MAIL_APP_PASSWORD required.\n"
-            "Get app password: QQ Mail → Settings → Account → IMAP/SMTP → Generate code",
+            f"Error: {prefix}_USER and {prefix}_APP_PASSWORD required.\n"
+            "Get app password from your email provider's settings",
             file=sys.stderr,
         )
         sys.exit(1)
     return {
+        "account": name,
         "user": user,
         "password": password,
-        "imap_host": os.environ.get("QQ_MAIL_IMAP_HOST", "imap.qq.com"),
-        "imap_port": int(os.environ.get("QQ_MAIL_IMAP_PORT", "993")),
-        "smtp_host": os.environ.get("QQ_MAIL_SMTP_HOST", "smtp.qq.com"),
-        "smtp_port": int(os.environ.get("QQ_MAIL_SMTP_PORT", "465")),
-        "archive_folder": os.environ.get("QQ_MAIL_ARCHIVE_FOLDER", "Archives"),
-        "sent_folder": os.environ.get("QQ_MAIL_SENT_FOLDER", "Sent Messages"),
+        "imap_host": os.environ.get(f"{prefix}_IMAP_HOST", provider["imap_host"]),
+        "imap_port": int(os.environ.get(f"{prefix}_IMAP_PORT", str(provider["imap_port"]))),
+        "smtp_host": os.environ.get(f"{prefix}_SMTP_HOST", provider["smtp_host"]),
+        "smtp_port": int(os.environ.get(f"{prefix}_SMTP_PORT", str(provider["smtp_port"]))),
+        "archive_folder": os.environ.get(f"{prefix}_ARCHIVE_FOLDER", provider["archive_folder"]),
+        "sent_folder": os.environ.get(f"{prefix}_SENT_FOLDER", provider.get("sent_folder", "Sent Messages")),
     }
 
 
@@ -100,6 +162,16 @@ def strip_html(text):
     text = re.sub(r"<[^>]+>", "", text)
     import html as html_mod
     return html_mod.unescape(text).strip()
+
+
+def build_web_link(config, msg):
+    """Build a web link to the mail provider's webmail. Returns None if unknown."""
+    account = config.get("account", "")
+    if account == "gmail":
+        return "https://mail.google.com/"
+    if account == "qq":
+        return "https://mail.qq.com/"
+    return None
 
 
 def extract_html_body(msg):
@@ -166,7 +238,7 @@ def extract_body(msg):
     return plain or html or ""
 
 
-def format_email(index, uid, msg, sent=False):
+def format_email(index, uid, msg, sent=False, config=None):
     """Format a single email as Markdown."""
     subject = decode_mime(msg.get("Subject", "(No Subject)"))
     date = msg.get("Date", "Unknown")
@@ -201,6 +273,11 @@ def format_email(index, uid, msg, sent=False):
 
     if attachments:
         lines.append(f"**Attachments:** {', '.join(attachments)}")
+
+    if config is not None:
+        link = build_web_link(config, msg)
+        if link:
+            lines.append(f"**Link:** {link}")
 
     lines.append("")
     body = extract_body(msg)
@@ -251,14 +328,14 @@ def filter_emails(emails, since=None, before=None, from_addr=None, subject=None)
     return filtered
 
 
-def format_emails(emails, sent=False):
+def format_emails(emails, sent=False, config=None):
     """Format list of (uid, msg) tuples as Markdown with reindexed headers."""
     if not emails:
         title = "已发送邮件" if sent else "未读邮件"
         return f"# {title} (0封)\n"
     parts = []
     for i, (uid, msg) in enumerate(emails, 1):
-        parts.append(format_email(i, uid, msg, sent=sent))
+        parts.append(format_email(i, uid, msg, sent=sent, config=config))
     title = "已发送邮件" if sent else "未读邮件"
     header = f"# {title} ({len(emails)}封)\n\n"
     return header + "\n\n---\n\n".join(parts)
@@ -451,6 +528,15 @@ async def send_email(config, to, subject, body, in_reply_to=None, references=Non
 
 # ── CLI Commands ────────────────────────────────
 
+def cmd_list_accounts(args):
+    accounts = list_accounts()
+    if not accounts:
+        print("No accounts configured.")
+        return
+    for acc in accounts:
+        print(f"  {acc['name']}: {acc['user']}")
+
+
 def cmd_fetch(args):
     since = args.since
     if args.days is not None:
@@ -467,16 +553,16 @@ def cmd_fetch(args):
                 print(f"Error: invalid date format '{val}', expected YYYY-MM-DD", file=sys.stderr)
                 sys.exit(1)
 
-    config = get_config()
+    config = get_config(getattr(args, "account", None))
     limit = 0 if args.fetch_all else args.limit
     emails = asyncio.run(fetch_emails(config, limit=limit, folder=args.folder))
     filtered = filter_emails(emails, since=since, before=args.before,
                              from_addr=args.from_addr, subject=args.subject)
-    print(format_emails(filtered))
+    print(format_emails(filtered, config=config))
 
 
 def cmd_reply(args):
-    config = get_config()
+    config = get_config(getattr(args, "account", None))
     orig = asyncio.run(get_email_full(config, args.uid))
     msg_id = orig.get("Message-ID")
     refs = orig.get("References")
@@ -496,7 +582,7 @@ def cmd_reply(args):
 
 
 def cmd_forward(args):
-    config = get_config()
+    config = get_config(getattr(args, "account", None))
     orig = asyncio.run(get_email_full(config, args.uid))
     subject = decode_mime(orig.get("Subject", ""))
     if not subject.lower().startswith("fwd:"):
@@ -533,39 +619,44 @@ def cmd_forward(args):
 
 
 def cmd_send(args):
-    config = get_config()
+    config = get_config(getattr(args, "account", None))
     asyncio.run(send_email(config, to=args.to, subject=args.subject, body=args.body))
 
 
 def cmd_sent(args):
-    config = get_config()
+    config = get_config(getattr(args, "account", None))
     folder = args.folder or config["sent_folder"]
     emails = asyncio.run(fetch_emails(config, limit=args.limit, folder=folder, search="ALL"))
     emails.reverse()
-    print(format_emails(emails, sent=True))
+    print(format_emails(emails, sent=True, config=config))
 
 
 def cmd_archive(args):
-    config = get_config()
+    config = get_config(getattr(args, "account", None))
     uids = [u.strip() for u in args.uid.split(",")]
     asyncio.run(archive_uids(config, uids))
 
 
 def cmd_folders(args):
-    config = get_config()
+    config = get_config(getattr(args, "account", None))
     result = asyncio.run(list_folders(config))
     print(result)
 
 
 def cmd_mark_read(args):
-    config = get_config()
+    config = get_config(getattr(args, "account", None))
     uids = [u.strip() for u in args.uid.split(",")]
     asyncio.run(mark_read_uids(config, uids))
 
 
 def main():
     parser = argparse.ArgumentParser(description="QQ Mail CLI")
+    parser.add_argument("--account", "-a", default=None,
+                        help="Account name (default: first configured account)")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("list-accounts", help="List configured email accounts")
+    p.set_defaults(func=cmd_list_accounts)
 
     p = sub.add_parser("fetch", help="Fetch unread emails")
     p.add_argument("--limit", type=int, default=10)

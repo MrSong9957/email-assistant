@@ -13,21 +13,34 @@ depends: []
 
 ## 前置检查
 
-每次操作前，先验证凭证是否已配置：
+首次操作时，先验证账户配置：
 
 ```bash
-python ~/.claude/skills/email-assistant/email_cli.py fetch --limit 1
+python ~/.claude/skills/email-assistant/email_cli.py list-accounts
 ```
 
-如果报错 `QQ_MAIL_USER and QQ_MAIL_APP_PASSWORD required`，引导用户：
-
-1. 登录 QQ 邮箱 → 设置 → 账号与安全 → 安全设置 → POP3/IMAP/SMTP/Exchange/CardDAV 服务 → 生成授权码
-2. 将授权码添加到 `~/.claude/skills/email-assistant/.env`：
+如果输出为空或报错，引导用户配置 `~/.claude/skills/email-assistant/.env`：
 
 ```
+MAIL_ACCOUNTS=qq,gmail
 QQ_MAIL_USER=你的QQ邮箱
-QQ_MAIL_APP_PASSWORD=你的授权码
+QQ_MAIL_APP_PASSWORD=你的QQ授权码
+GMAIL_USER=你的Gmail邮箱
+GMAIL_APP_PASSWORD=你的Gmail应用专用密码
 ```
+
+获取应用专用密码：
+- QQ 邮箱：设置 → 账号与安全 → 安全设置 → POP3/IMAP/SMTP → 生成授权码
+- Gmail：Google 账号 → 安全性 → 两步验证 → 应用专用密码
+
+## 账户选择
+
+当 `list-accounts` 显示多个账户时：
+
+- 首次交互时告知用户：`当前使用 [第一个账户名] 邮箱 (user@example.com)，另有 [其他账户] 可用。使用 --account 切换。`
+- 用户提到"Gmail 邮件"/"QQ邮箱"时，自动使用 `--account gmail` 或 `--account qq`
+- 单账户时不特别提及账户信息
+- 所有命令支持 `--account <name>` / `-a <name>` 参数（单账户可省略）
 
 ## 操作流程
 
@@ -36,7 +49,7 @@ QQ_MAIL_APP_PASSWORD=你的授权码
 **第一步：拉取邮件**
 
 ```bash
-python ~/.claude/skills/email-assistant/email_cli.py fetch [--limit 10] [--folder INBOX]
+python ~/.claude/skills/email-assistant/email_cli.py fetch [--limit 10] [--folder INBOX] [--account qq]
 ```
 
 **筛选邮件**
@@ -56,6 +69,7 @@ python ~/.claude/skills/email-assistant/email_cli.py fetch [--limit 10] [--folde
 ```bash
 python ~/.claude/skills/email-assistant/email_cli.py fetch --days 7
 python ~/.claude/skills/email-assistant/email_cli.py fetch --since 2026-05-01 --from 张三
+python ~/.claude/skills/email-assistant/email_cli.py fetch --days 7 --account gmail
 ```
 
 **第二步：分析分类（内部完成，不输出原始内容）**
@@ -111,7 +125,7 @@ python ~/.claude/skills/email-assistant/email_cli.py mark-read --uid <UID1,UID2,
 
 当用户说"查看第 N 封"或"查看 xxx 的内容"时，区分两种邮件：
 
-**普通邮件**：直接展示完整内容。
+**普通邮件**：直接展示完整内容。邮件详情末尾自动包含 webmail 链接（`**Link:**` 行），点击可打开邮件官网。
 
 **Newsletter 型邮件**（Nature Briefing、AI Weekly、PyCoder's 等包含多篇独立文章的订阅邮件），提取文章列表：
 
@@ -409,26 +423,39 @@ python ~/.claude/skills/email-assistant/email_cli.py mark-read --uid <UID1,UID2,
 
 ### 示例 4：回复邮件
 
-用户：回复第1封，告诉他周三没问题
+用户：回复第7封，告诉他 SMTP 连接正常
 
-助手：好的，准备回复张三。邮件内容如下：
+助手：好的，准备回复。邮件内容如下：
 
 ```
-> Re: 关于项目进度
+> Re: Gmail SMTP 测试
 >
-> 张三你好，
-> 周三的评审我可以参加，没问题。
->
-> 此致
+> 收到，SMTP 连接正常。这是一封测试回复。
 ```
 
 确认发送吗？
 
 用户：确认
 
-助手：（执行 reply 命令）已发送。
+助手：（执行 reply + mark-read + sent 验证）
 
 ```
+✅ 发送成功，已验证
+
+📬 已发送邮件 — 最近 5 封
+
+┌─────┬──────────────────────┬──────────────────┬──────────────────────────────────────────┐
+│ #   │ 收件人               │ 主题             │ 摘要                                     │
+├─────┼──────────────────────┼──────────────────┼──────────────────────────────────────────┤
+│  1  │ sry***58@gmail.com   │ Re: Gmail SMTP…  │ SMTP 连接正常，测试回复                   │
+├─────┼──────────────────────┼──────────────────┼──────────────────────────────────────────┤
+│  2  │ 7***7@qq.com         │ Fwd: 安全提醒    │ Gmail 安全提醒转发                        │
+├─────┼──────────────────────┼──────────────────┼──────────────────────────────────────────┤
+│  3  │ 7***7@qq.com         │ Fwd: 订单状态    │ 京东订单转发                              │
+└─────┴──────────────────────┴──────────────────┴──────────────────────────────────────────┘
+
+回复邮件已出现在发件箱第 1 位，发送、验证全流程通过。
+
 > 💡 `处理下一封` · `查看剩余未读`
 ```
 

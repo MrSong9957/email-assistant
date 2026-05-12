@@ -5,6 +5,7 @@ from unittest.mock import patch
 def make_config(**overrides):
     """Create a test config with sensible defaults."""
     base = {
+        "account": "qq",
         "user": "test@qq.com",
         "password": "testpass",
         "imap_host": "imap.qq.com",

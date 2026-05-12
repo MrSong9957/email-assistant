@@ -9,7 +9,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 
-from email_cli import format_email, format_emails
+from email_cli import build_web_link, format_email, format_emails
 
 
 def _make_email(subject="Test", from_addr="Alice <alice@example.com>",
@@ -109,3 +109,52 @@ class TestFormatEmailsSentMode:
 
         result = format_emails([("1", msg)], sent=False)
         assert "未读邮件" in result
+
+
+class TestBuildWebLink:
+    def test_gmail_with_message_id(self):
+        msg = _make_email()
+        msg["Message-ID"] = "<abc123@gmail.com>"
+        config = {"account": "gmail", "user": "test@gmail.com"}
+        link = build_web_link(config, msg)
+        assert link == "https://mail.google.com/"
+
+    def test_gmail_without_message_id(self):
+        msg = _make_email()
+        config = {"account": "gmail", "user": "test@gmail.com"}
+        link = build_web_link(config, msg)
+        assert link == "https://mail.google.com/"
+
+    def test_qq_mail(self):
+        msg = _make_email()
+        msg["Message-ID"] = "<xyz@qq.com>"
+        config = {"account": "qq", "user": "test@qq.com"}
+        link = build_web_link(config, msg)
+        assert link == "https://mail.qq.com/"
+
+    def test_unknown_provider(self):
+        msg = _make_email()
+        config = {"account": "outlook", "user": "test@outlook.com"}
+        link = build_web_link(config, msg)
+        assert link is None
+
+
+class TestFormatEmailLink:
+    def test_link_with_config(self):
+        msg = _make_email()
+        msg["Message-ID"] = "<abc@gmail.com>"
+        config = {"account": "gmail", "user": "test@gmail.com"}
+        result = format_email(1, "100", msg, config=config)
+        assert "**Link:**" in result
+        assert "mail.google.com" in result
+
+    def test_no_link_without_config(self):
+        msg = _make_email()
+        result = format_email(1, "100", msg)
+        assert "**Link:**" not in result
+
+    def test_no_link_for_unknown_provider(self):
+        msg = _make_email()
+        config = {"account": "outlook", "user": "test@outlook.com"}
+        result = format_email(1, "100", msg, config=config)
+        assert "**Link:**" not in result

@@ -1,218 +1,322 @@
-# Email Assistant for Claude Code
+# Email Assistant — AI-Powered Email in Your Terminal
 
-用自然语言管理邮箱 — 通过 IMAP/SMTP 连接 QQ 邮箱和 Gmail，在 AI 对话中直接查看、回复、转发和归档邮件。
+A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) / [Codex CLI](https://github.com/openai/codex) / [OpenCode](https://github.com/opencode-ai/opencode) **Skill** that lets you manage your inbox with natural language. Connect QQ Mail and Gmail via IMAP/SMTP — check, reply, forward, and archive emails without leaving your AI conversation.
 
-English | 中文
+[中文文档](README.zh-CN.md)
 
-## 特性
+## One-Click Install
 
-- **自然语言操作** — 说"看看有什么新邮件"即可，无需记忆命令
-- **AI 智能分类** — 自动将邮件分为「需要关注」和「订阅/通知」，表格化汇报
-- **Newsletter 拆解** — 自动识别并提取 Nature Briefing、AI Weekly 等订阅邮件中的文章
-- **多邮箱账户** — 同时支持 QQ 邮箱和 Gmail，`--account` 一键切换
-- **完整邮件操作** — 查看、回复、转发、发新邮件、归档、标记已读
-- **HTML 转发** — 保留原始邮件的 HTML 格式，非纯文本降级
-- **发送验证** — 回复/转发/发送后自动验证邮件已进入发件箱
-- **双语展示** — 外语邮件发送前展示中文大意 + 外语正文
-
-## 架构
+In Claude Code, just say:
 
 ```
-用户口头指令 → Claude Code → SKILL.md → email_cli.py → IMAP/SMTP → 邮箱
-                                                              ↓
-                                                         AI 摘要 + 分类 → 终端展示
+Install the email-assistant skill: git clone https://github.com/MrSong9957/email-assistant.git && cd email-assistant && ./install.sh
 ```
 
-## 快速开始
+Or simply:
 
-**1. 安装**
-
-```bash
-# 一键安装到 Claude Code 技能目录
-chmod +x install.sh && ./install.sh
-
-# 或 Windows PowerShell
-.\install.ps1
+```
+Install this Skill: https://github.com/MrSong9957/email-assistant
 ```
 
-**2. 配置**
+That's it. The skill is ready to use.
 
-复制 `.env.example` 为 `.env`，填入邮箱和授权码：
+## Configure
+
+Copy `.env.example` to `.env` and fill in your email credentials:
 
 ```bash
 MAIL_ACCOUNTS=qq,gmail
 QQ_MAIL_USER=your@qq.com
-QQ_MAIL_APP_PASSWORD=你的授权码
+QQ_MAIL_APP_PASSWORD=your-authorization-code
 GMAIL_USER=your@gmail.com
-GMAIL_APP_PASSWORD=你的应用专用密码
+GMAIL_APP_PASSWORD=your-app-password
 ```
 
-> QQ 邮箱：设置 → 账号与安全 → 安全设置 → POP3/IMAP/SMTP → 生成授权码
-> Gmail：Google 账号 → 安全性 → 两步验证 → 应用专用密码
+> **Get your authorization code / app password:**
+>
+> | Provider | Status | Setup |
+> |----------|--------|-------|
+> | QQ Mail | ✅ Supported | [mail.qq.com](https://mail.qq.com) → Settings → Account & Security → Security Settings → POP3/IMAP/SMTP/Exchange/CardDAV → Generate authorization code |
+> | Gmail | ✅ Supported | [App passwords](https://myaccount.google.com/apppasswords) |
+> | 163 Mail | Planned | [mail.163.com](https://mail.163.com) |
+> | Outlook | Planned | [outlook.live.com](https://outlook.live.com) |
+> | Yahoo Mail | Planned | [mail.yahoo.com](https://mail.yahoo.com) |
+> | iCloud Mail | Planned | [appleid.apple.com](https://appleid.apple.com) |
+> | Aliyun Mail | Planned | [mail.aliyun.com](https://mail.aliyun.com) |
+> | 139 Mail | Planned | [mail.10086.cn](https://mail.10086.cn) |
+> | Sina Mail | Planned | [mail.sina.com](https://mail.sina.com) |
+> | ProtonMail | Planned | [proton.me](https://proton.me) (requires Bridge) |
+> | Zoho Mail | Planned | [zoho.com/mail](https://www.zoho.com/mail) |
 
-**3. 使用**
+## Usage
 
-在 Claude Code 对话中直接说：
+Say it naturally in your AI conversation:
 
 ```
-看看有什么新邮件
-回复第1封，告诉他周三没问题
-转发第2封给 alice@example.com
-把通知邮件归档
+Check my new emails
+Reply to #1, tell him Wednesday works
+Forward #2 to alice@example.com
+Archive the notification emails
 ```
 
-## 使用效果
+## Demos
 
-### 查看未读邮件
+### Check Unread Emails
 
 ```
-用户：看看有什么新邮件
+You: Check my new emails
 
-📬 邮件汇报 — 共 10 封未读
-🔴 需要关注 2 封 · ⚪ 订阅/通知 8 封
+📬 Email Report — 10 unread
+🔴 Needs attention 2 · ⚪ Subscriptions 8
 
 ┌─────┬──────┬────────────┬──────────────────────┬────────────────────────────────────────┐
-│ #   │ 类别 │ 发件人     │ 主题                 │ 摘要                                   │
+│ #   │ Cat. │ Sender     │ Subject              │ Summary                                │
 ├─────┼──────┼────────────┼──────────────────────┼────────────────────────────────────────┤
-│  1  │  ⚪  │ AI Weekly  │ PE built AI's new…  │ 私募股权构建 AI 新分发渠道的新闻摘要   │
+│  1  │  ⚪  │ AI Weekly  │ PE built AI's new…  │ PE firms building AI distribution channels │
 ├─────┼──────┼────────────┼──────────────────────┼────────────────────────────────────────┤
-│  6  │  🔴  │ GitHub     │ 第三方应用已添加     │ 安全告警：有应用获得账号访问权限       │
+│  2  │  ⚪  │ Nature     │ Who needs testoste… │ Testosterone therapy research progress  │
+├─────┼──────┼────────────┼──────────────────────┼────────────────────────────────────────┤
+│  3  │  ⚪  │ PyCoder's  │ marimo pair, Findi… │ marimo pairing, LLM bug-finding tools  │
+├─────┼──────┼────────────┼──────────────────────┼────────────────────────────────────────┤
+│  4  │  ⚪  │ JD.com     │ Order confirmed      │ Order confirmed, track delivery        │
+├─────┼──────┼────────────┼──────────────────────┼────────────────────────────────────────┤
+│  5  │  ⚪  │ Nature     │ Digital distractio… │ Digital-age attention management study │
+├─────┼──────┼────────────┼──────────────────────┼────────────────────────────────────────┤
+│  6  │  🔴  │ GitHub     │ Third-party app added│ Security alert: app got account access │
+├─────┼──────┼────────────┼──────────────────────┼────────────────────────────────────────┤
+│  7  │  ⚪  │ PyCharm    │ Python Unplugged…   │ Community livestream event highlights  │
+├─────┼──────┼────────────┼──────────────────────┼────────────────────────────────────────┤
+│  8  │  ⚪  │ AI Weekly  │ Anthropic updates    │ Anthropic's biggest 2026 release week  │
+├─────┼──────┼────────────┼──────────────────────┼────────────────────────────────────────┤
+│  9  │  🔴  │ GitHub     │ Personal token added │ Security alert: classic PAT added      │
+├─────┼──────┼────────────┼──────────────────────┼────────────────────────────────────────┤
+│ 10  │  ⚪  │ Nature     │ Detailed map of uni… │ High-res universe map, best sci photos │
 └─────┴──────┴────────────┴──────────────────────┴────────────────────────────────────────┘
 
-需要查看详情或操作哪封？
-> 是否标记已读？可以"全部标记"或指定序号，未标记的下次仍会出现。
+Which one would you like to view or act on?
+> Mark as read? "Mark all" or specify a number. Unmarked ones will appear again next time.
 ```
 
-### Newsletter 拆解
+### View Email Details
 
 ```
-用户：查看Nature的内容
+You: Show me the Nature newsletter
 
-第 2 封 (2026.05.05) | Nature Briefing
-主题：Who needs testosterone therapy?
+Email #2 (2026.05.05) | Nature Briefing
+Subject: Who needs testosterone therapy?
 
 ┌──────────────────────┬──────────────────────────────────────────────────────────────┐
-│ 文章                 │ 摘要                                                         │
+│ Article              │ Summary                                                      │
 ├──────────────────────┼──────────────────────────────────────────────────────────────┤
-│ 🏛️ 伊朗科学中心遭… │ 美以轰炸损毁伊朗多所大学和医院，研究者警告攻击大学成为新常态 │
+│ 🏛️ Iranian science… │ US-Israeli bombings damaged Iranian universities & hospitals │
 ├──────────────────────┼──────────────────────────────────────────────────────────────┤
-│ 🧬 AI 简化蛋白质字… │ 用生成式 AI 设计只需 19 种氨基酸即可运转的细菌核糖体         │
+│ 🧬 AI simplifies…   │ Generative AI designs ribosomes needing only 19 amino acids  │
 ├──────────────────────┼──────────────────────────────────────────────────────────────┤
-│ ☢️ 科学家重返福岛   │ 福岛核灾 15 年后，浪江町建设 F-REI 研究所                    │
+│ ☢️ Scientists retu… │ Fukushima 15 years on, Namie builds F-REI research center   │
 └──────────────────────┴──────────────────────────────────────────────────────────────┘
 ```
 
-### 回复与发送验证
+### Read Full Article
 
 ```
-用户：回复第7封，告诉他 SMTP 连接正常
+You: Show me the full article about the Iranian science center bombing
 
-> Re: Gmail SMTP 测试
-> 收到，SMTP 连接正常。这是一封测试回复。
+Email #2 — Iranian science center bombed (2026.05.05)
 
-确认发送吗？
+US and Israeli airstrikes damaged several universities and hospitals in Iran. Nature interviewed researchers:
 
-用户：确认
+- Affected institutions: Tehran's Shefa Neuroscience Center is one confirmed
+  damaged facility, led by neuroscientist Ali Gorji (based in Germany),
+  who supervises PhD students there.
+- Researcher voices: Gorji stated: "If attacking universities becomes
+  normalized, it could happen in any future foolish war. That mindset is
+  more destructive than attacking a single building."
+- Official response: White House and Israeli military representatives told
+  Nature they don't target civilian infrastructure, but did not explain
+  why these institutions were bombed.
 
-✅ 发送成功，已验证
+> Source: Nature | 8 min read
 
-📬 已发送邮件 — 最近 5 封
+> 💡 `Mark 2 read` · `View #5 Nature` · `View all unread`
+```
+
+### Reply & Send Verification
+
+```
+You: Reply to #7, tell him SMTP is working
+
+Sure, preparing your reply:
+
+> Re: Gmail SMTP Test
+>
+> Received, SMTP connection is working. This is a test reply.
+
+Confirm send?
+
+You: Confirm
+
+✅ Sent successfully, verified
+
+📬 Sent Emails — Recent 5
 
 ┌─────┬──────────────────────┬──────────────────┬──────────────────────────────────────────┐
-│ #   │ 收件人               │ 主题             │ 摘要                                     │
+│ #   │ Recipient            │ Subject          │ Summary                                  │
 ├─────┼──────────────────────┼──────────────────┼──────────────────────────────────────────┤
-│  1  │ sry***58@gmail.com   │ Re: Gmail SMTP…  │ SMTP 连接正常，测试回复                   │
+│  1  │ sry***58@gmail.com   │ Re: Gmail SMTP…  │ SMTP working, test reply                  │
+├─────┼──────────────────────┼──────────────────┼──────────────────────────────────────────┤
+│  2  │ 7***7@qq.com         │ Fwd: Security…   │ Gmail security alert forwarded            │
+├─────┼──────────────────────┼──────────────────┼──────────────────────────────────────────┤
+│  3  │ 7***7@qq.com         │ Fwd: Order stat… │ JD.com order forwarded                    │
 └─────┴──────────────────────┴──────────────────┴──────────────────────────────────────────┘
+
+Reply appeared in Sent folder at #1. Send & verify flow complete.
+> 💡 `Handle next email` · `View remaining unread`
 ```
 
-更多使用场景（双语邮件、归档、标记已读等）请查看 [SKILL.md](SKILL.md)。
+### Compose & Send Verification
 
-## 配置
+```
+You: Send an English email to Dakang
 
-| 环境变量 | 必填 | 默认值 | 说明 |
-|---------|------|--------|------|
-| `MAIL_ACCOUNTS` | 是 | — | 账户列表，逗号分隔（如 `qq,gmail`） |
-| `QQ_MAIL_USER` | 是 | — | QQ 邮箱地址 |
-| `QQ_MAIL_APP_PASSWORD` | 是 | — | QQ 邮箱授权码 |
-| `GMAIL_USER` | 是* | — | Gmail 邮箱地址 |
-| `GMAIL_APP_PASSWORD` | 是* | — | Gmail 应用专用密码 |
-| `*_IMAP_HOST` | 否 | 见下表 | IMAP 服务器 |
-| `*_IMAP_PORT` | 否 | `993` | IMAP 端口 |
-| `*_SMTP_HOST` | 否 | 见下表 | SMTP 服务器 |
-| `*_SMTP_PORT` | 否 | `465` | SMTP 端口 |
+📧 Email to be sent:
 
-> *仅当 `MAIL_ACCOUNTS` 包含 `gmail` 时必填
+> **Chinese summary:**
+> Hey Dakang, thanks for your lightning-fast response time. Reading a
+> message within 48 hours is truly awe-inspiring. Next time we meet I must
+> ask about your time management secrets.
+>
+> **Actual email (English):**
+> Hey Dakang,
+>
+> Just wanted to take a moment to appreciate your absolutely breathtaking
+> response time. The way you manage to read a message and still not reply
+> for 48 hours is truly next-level. I aspire to that level of prioritization
+> one day.
+>
+> Can't wait for our next hangout where I can watch you check your phone
+> and put it back in your pocket. Truly inspiring stuff.
+>
+> Warmest regards,
+> MrSong
 
-Provider 默认值：
+Confirm send?
 
-| Provider | IMAP | SMTP | 归档文件夹 | 发件箱 |
-|----------|------|------|-----------|--------|
-| QQ | imap.qq.com | smtp.qq.com | Archives | Sent Messages |
-| Gmail | imap.gmail.com | smtp.gmail.com | [Gmail]/All Mail | [Gmail]/Sent Mail |
+You: Send
 
-## 安装方式
+✅ Sent successfully, verified
 
-### 一键脚本
+📬 Sent Emails — Recent 5
+
+┌─────┬───────────────┬──────────────────────┬──────────────────────────────────────────────────────┐
+│ #   │ Recipient     │ Subject              │ Summary                                              │
+├─────┼───────────────┼──────────────────────┼──────────────────────────────────────────────────────┤
+│  1  │ 7***7@qq.com  │ Just wanted to say…  │ Appreciating your response time, 48hr no-reply master│
+├─────┼───────────────┼──────────────────────┼──────────────────────────────────────────────────────┤
+│  2  │ 7***7@qq.com  │ How's it going       │ How's work? Enjoy the May Day holiday?              │
+├─────┼───────────────┼──────────────────────┼──────────────────────────────────────────────────────┤
+│  3  │ 7***7@qq.com  │ Weekend greetings    │ Hey Dakang, long time no see! Have a great weekend  │
+├─────┼───────────────┼──────────────────────┼──────────────────────────────────────────────────────┤
+│  4  │ 7***7@qq.com  │ Re-select folder test│ Testing re-select                                    │
+├─────┼───────────────┼──────────────────────┼──────────────────────────────────────────────────────┤
+│  5  │ 7***7@qq.com  │ Stability re-test    │ Confirming fix is stable                             │
+└─────┴───────────────┴──────────────────────┴──────────────────────────────────────────────────────┘
+
+English email appeared in Sent folder at #1. Bilingual display, send & verify flow complete.
+> 💡 `Check unread emails` · `View details 1`
+```
+
+More scenarios (archiving, mark as read, etc.) in [SKILL.md](SKILL.md).
+
+## Features
+
+- **Natural language** — Say "check my new emails", no commands to remember
+- **AI-powered categorization** — Auto-sorts into "needs attention" vs. "subscriptions/notifications"
+- **Newsletter digest** — Extracts articles from Nature Briefing, AI Weekly, etc.
+- **Multiple accounts** — QQ Mail and Gmail, switch with `--account`
+- **Full email operations** — Check, reply, forward, compose, archive, mark as read
+- **HTML forwarding** — Preserves original HTML formatting
+- **Send verification** — Auto-verifies sent mail appears in Sent folder
+- **Bilingual display** — Shows Chinese summary + foreign-language body before sending
+
+## Traditional Install
+
+<details>
+<summary>One-click script</summary>
 
 ```bash
-# Claude Code（默认）
-./install.sh
+# Clone and install
+git clone https://github.com/MrSong9957/email-assistant.git
+cd email-assistant
+chmod +x install.sh && ./install.sh
 
-# 其他工具
+# Other tools
 ./install.sh --tool codex        # Codex CLI
 ./install.sh --tool opencode     # OpenCode
-./install.sh --project           # 项目级安装
+./install.sh --project           # Project-level install
 ```
 
-Windows PowerShell：
+Windows PowerShell:
 
 ```powershell
 .\install.ps1                         # Claude Code
 .\install.ps1 -Tool codex             # Codex CLI
-.\install.ps1 -Project                # 项目级安装
+.\install.ps1 -Project                # Project-level install
 ```
 
-### 手动安装
+</details>
 
-1. 创建技能目录：`mkdir -p ~/.claude/skills/email-assistant`
-2. 复制文件：`cp SKILL.md email_cli.py requirements.txt .env.example ~/.claude/skills/email-assistant/`
-3. 安装依赖：`pip install -r ~/.claude/skills/email-assistant/requirements.txt`
-4. 配置凭证：复制 `.env.example` 为 `.env`，填入邮箱和授权码
+<details>
+<summary>Manual install</summary>
 
-### 工具目录对照
+1. Create skill directory: `mkdir -p ~/.claude/skills/email-assistant`
+2. Copy files: `cp SKILL.md email_cli.py requirements.txt .env.example ~/.claude/skills/email-assistant/`
+3. Install dependencies: `pip install -r ~/.claude/skills/email-assistant/requirements.txt`
+4. Configure: copy `.env.example` to `.env` and fill in credentials
 
-| 工具 | 全局目录 | 项目级目录 |
-|------|---------|-----------|
+</details>
+
+<details>
+<summary>Tool directory reference</summary>
+
+| Tool | Global | Project |
+|------|--------|---------|
 | Claude Code | `~/.claude/skills/email-assistant/` | `.claude/skills/email-assistant/` |
 | Codex CLI | `~/.agents/skills/email-assistant/` | `.agents/skills/email-assistant/` |
 | Cursor | — | `.cursor/skills/email-assistant/` |
-| OpenCode | `~/.config/opencode/skills/email-assistant/` | 项目内 |
+| OpenCode | `~/.config/opencode/skills/email-assistant/` | project root |
 
-## 开发
+</details>
+
+<details>
+<summary>Configuration reference</summary>
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `MAIL_ACCOUNTS` | Yes | — | Comma-separated account list (e.g. `qq,gmail`) |
+| `QQ_MAIL_USER` | Yes | — | QQ Mail address |
+| `QQ_MAIL_APP_PASSWORD` | Yes | — | QQ Mail authorization code |
+| `GMAIL_USER` | Yes* | — | Gmail address |
+| `GMAIL_APP_PASSWORD` | Yes* | — | Gmail app password |
+| `*_IMAP_HOST` | No | see below | IMAP server |
+| `*_IMAP_PORT` | No | `993` | IMAP port |
+| `*_SMTP_HOST` | No | see below | SMTP server |
+| `*_SMTP_PORT` | No | `465` | SMTP port |
+
+> *Required only when `MAIL_ACCOUNTS` includes `gmail`
+
+| Provider | IMAP | SMTP | Archive folder | Sent folder |
+|----------|------|------|----------------|-------------|
+| QQ | imap.qq.com | smtp.qq.com | Archives | Sent Messages |
+| Gmail | imap.gmail.com | smtp.gmail.com | [Gmail]/All Mail | [Gmail]/Sent Mail |
+
+</details>
+
+## Development
 
 ```bash
-# 安装开发依赖
 pip install -r requirements-dev.txt
-
-# 运行测试
 pytest tests/ -v
-
-# Docker 开发环境
 docker compose -f docker/docker-compose.yml up
-```
-
-## 项目结构
-
-```
-├── SKILL.md                  # 技能定义（Claude Code / Codex CLI 的入口）
-├── email_cli.py              # CLI 核心逻辑（IMAP/SMTP/格式化）
-├── requirements.txt          # 运行依赖
-├── requirements-dev.txt      # 开发依赖
-├── .env.example              # 配置模板
-├── install.sh / install.ps1  # 一键安装脚本
-├── tests/                    # 测试（76 个用例）
-├── docker/                   # 开发环境配置
-└── docs/                     # 文档
 ```
 
 ## License
