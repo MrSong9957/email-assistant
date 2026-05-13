@@ -33,6 +33,17 @@ GMAIL_APP_PASSWORD=你的Gmail应用专用密码
 - QQ 邮箱：设置 → 账号与安全 → 安全设置 → POP3/IMAP/SMTP → 生成授权码
 - Gmail：Google 账号 → 安全性 → 两步验证 → 应用专用密码
 
+## 连接失败兜底
+
+当 fetch/reply 等操作报 `IMAP connection error` 时，向用户说明原因并建议转发方案：
+
+1. **转发方案说明**：在无法直连的邮箱 A 中设置转发规则 → 将所有邮件转发到已配置好的邮箱 B → 通过邮箱 B 查看 A 和 B 的邮件
+2. **常见邮箱的转发设置路径**：
+   - Outlook: Settings → Mail → Rules → Forwarding
+   - iCloud: Settings → Mail → Forwarding
+   - Yahoo: Settings → More Settings → Mailboxes → Forwarding
+3. **限制**：转发后只能查看（通过邮箱 B 收件箱），回复/发信仍使用邮箱 B 的身份，无法以邮箱 A 的身份发送
+
 ## 账户选择
 
 当 `list-accounts` 显示多个账户时：

@@ -476,6 +476,29 @@ class TestCmdFetchWithFilters:
         assert result.returncode != 0
 
 
+class TestImapConnectionError:
+    """Verify IMAP connection failure includes forwarding fallback hint."""
+
+    @pytest.mark.asyncio
+    async def test_error_includes_forwarding_hint(self, capsys):
+        from email_cli import imap_client
+
+        mock_client = AsyncMock()
+        mock_client.wait_hello_from_server = AsyncMock()
+        mock_client.login = AsyncMock(side_effect=Exception("auth failed"))
+        mock_client.logout = AsyncMock()
+
+        with patch("email_cli.aioimaplib.IMAP4_SSL", return_value=mock_client):
+            with pytest.raises(SystemExit):
+                async with imap_client(make_config()):
+                    pass
+
+        err = capsys.readouterr().err
+        assert "IMAP connection error: auth failed" in err
+        assert "转发规则" in err
+        assert "SKILL.md" in err
+
+
 class TestFormatEmails:
     def test_formats_list_with_reindexed_headers(self):
         from email_cli import format_emails

@@ -25,11 +25,13 @@
 复制 `.env.example` 为 `.env`，填入邮箱和授权码：
 
 ```bash
-MAIL_ACCOUNTS=qq,gmail
+MAIL_ACCOUNTS=qq,gmail,163
 QQ_MAIL_USER=your@qq.com
 QQ_MAIL_APP_PASSWORD=你的授权码
 GMAIL_USER=your@gmail.com
 GMAIL_APP_PASSWORD=你的应用专用密码
+MAIL163_USER=your@163.com
+MAIL163_APP_PASSWORD=你的授权码
 ```
 
 > **获取授权码 / 应用专用密码：**
@@ -38,12 +40,11 @@ GMAIL_APP_PASSWORD=你的应用专用密码
 > |------|------|----------|
 > | QQ 邮箱 | ✅ 已支持 | [mail.qq.com](https://mail.qq.com) → 设置 → 账号与安全 → 安全设置 → POP3/IMAP/SMTP/Exchange/CardDAV 服务（已开启） → 生成授权码 |
 > | Gmail | ✅ 已支持 | [应用专用密码](https://myaccount.google.com/apppasswords) |
-> | 163 邮箱 | 计划中 | [mail.163.com](https://mail.163.com) |
-> | Outlook | 计划中 | [outlook.live.com](https://outlook.live.com) |
-> | Yahoo 邮箱 | 计划中 | [mail.yahoo.com](https://mail.yahoo.com) |
+> | 163 邮箱 | ✅ 已支持 | [mail.163.com](https://mail.163.com) → 设置 → POP3/SMTP/IMAP |
+> | Outlook | 计划中* | [outlook.live.com](https://outlook.live.com) — *可通过 [邮件转发](https://outlook.live.com/mail/0/options/mail/rules) 作为替代方案* |
 > | iCloud 邮箱 | 计划中 | [appleid.apple.com](https://appleid.apple.com) |
 > | 阿里邮箱 | 计划中 | [mail.aliyun.com](https://mail.aliyun.com) |
-> | 139 邮箱 | 计划中 | [mail.10086.cn](https://mail.10086.cn) |
+> | 139 邮箱 | ✅ 已支持 | [mail.10086.cn](https://mail.10086.cn) → 设置 → 常用设置 → 获取授权码 |
 > | 新浪邮箱 | 计划中 | [mail.sina.com](https://mail.sina.com) |
 > | ProtonMail | 计划中 | [proton.me](https://proton.me)（需 Bridge） |
 > | Zoho 邮箱 | 计划中 | [zoho.com/mail](https://www.zoho.com/mail) |
@@ -294,17 +295,20 @@ Windows PowerShell：
 | `QQ_MAIL_APP_PASSWORD` | 是 | — | QQ 邮箱授权码 |
 | `GMAIL_USER` | 是* | — | Gmail 邮箱地址 |
 | `GMAIL_APP_PASSWORD` | 是* | — | Gmail 应用专用密码 |
+| `MAIL163_USER` | 是* | — | 163 邮箱地址 |
+| `MAIL163_APP_PASSWORD` | 是* | — | 163 邮箱授权码 |
 | `*_IMAP_HOST` | 否 | 见下表 | IMAP 服务器 |
 | `*_IMAP_PORT` | 否 | `993` | IMAP 端口 |
 | `*_SMTP_HOST` | 否 | 见下表 | SMTP 服务器 |
 | `*_SMTP_PORT` | 否 | `465` | SMTP 端口 |
 
-> *仅当 `MAIL_ACCOUNTS` 包含 `gmail` 时必填
+> *仅当 `MAIL_ACCOUNTS` 包含对应邮箱（gmail、163）时必填
 
 | Provider | IMAP | SMTP | 归档文件夹 | 发件箱 |
 |----------|------|------|-----------|--------|
 | QQ | imap.qq.com | smtp.qq.com | Archives | Sent Messages |
 | Gmail | imap.gmail.com | smtp.gmail.com | [Gmail]/All Mail | [Gmail]/Sent Mail |
+| 163 | imap.163.com | smtp.163.com | Archives | Sent Messages |
 
 </details>
 

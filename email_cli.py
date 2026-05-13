@@ -257,7 +257,12 @@ async def imap_client(config):
             await client.protocol.execute(cmd)
         yield client
     except Exception as e:
-        print(f"IMAP connection error: {e}", file=sys.stderr)
+        print(
+            f"IMAP connection error: {e}\n\n"
+            "提示：如无法直接连接此邮箱，可在该邮箱中设置转发规则，\n"
+            "将邮件转发到已配置的邮箱来查看。详见 SKILL.md「连接失败兜底」。",
+            file=sys.stderr,
+        )
         sys.exit(2)
     finally:
         try:

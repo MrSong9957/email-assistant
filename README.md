@@ -25,11 +25,13 @@ That's it. The skill is ready to use.
 Copy `.env.example` to `.env` and fill in your email credentials:
 
 ```bash
-MAIL_ACCOUNTS=qq,gmail
+MAIL_ACCOUNTS=qq,gmail,163
 QQ_MAIL_USER=your@qq.com
 QQ_MAIL_APP_PASSWORD=your-authorization-code
 GMAIL_USER=your@gmail.com
 GMAIL_APP_PASSWORD=your-app-password
+MAIL163_USER=your@163.com
+MAIL163_APP_PASSWORD=your-authorization-code
 ```
 
 > **Get your authorization code / app password:**
@@ -38,12 +40,11 @@ GMAIL_APP_PASSWORD=your-app-password
 > |----------|--------|-------|
 > | QQ Mail | ✅ Supported | [mail.qq.com](https://mail.qq.com) → Settings → Account & Security → Security Settings → POP3/IMAP/SMTP/Exchange/CardDAV → Generate authorization code |
 > | Gmail | ✅ Supported | [App passwords](https://myaccount.google.com/apppasswords) |
-> | 163 Mail | Planned | [mail.163.com](https://mail.163.com) |
-> | Outlook | Planned | [outlook.live.com](https://outlook.live.com) |
-> | Yahoo Mail | Planned | [mail.yahoo.com](https://mail.yahoo.com) |
+> | 163 Mail | ✅ Supported | [mail.163.com](https://mail.163.com) → Settings → POP3/SMTP/IMAP |
+> | Outlook | Planned* | [outlook.live.com](https://outlook.live.com) — *can use [email forwarding](https://outlook.live.com/mail/0/options/mail/rules) as fallback* |
 > | iCloud Mail | Planned | [appleid.apple.com](https://appleid.apple.com) |
 > | Aliyun Mail | Planned | [mail.aliyun.com](https://mail.aliyun.com) |
-> | 139 Mail | Planned | [mail.10086.cn](https://mail.10086.cn) |
+> | 139 Mail | ✅ Supported | [mail.10086.cn](https://mail.10086.cn) → 设置 → 常用设置 → 获取授权码 |
 > | Sina Mail | Planned | [mail.sina.com](https://mail.sina.com) |
 > | ProtonMail | Planned | [proton.me](https://proton.me) (requires Bridge) |
 > | Zoho Mail | Planned | [zoho.com/mail](https://www.zoho.com/mail) |
@@ -297,17 +298,20 @@ Windows PowerShell:
 | `QQ_MAIL_APP_PASSWORD` | Yes | — | QQ Mail authorization code |
 | `GMAIL_USER` | Yes* | — | Gmail address |
 | `GMAIL_APP_PASSWORD` | Yes* | — | Gmail app password |
+| `MAIL163_USER` | Yes* | — | 163 Mail address |
+| `MAIL163_APP_PASSWORD` | Yes* | — | 163 Mail authorization code |
 | `*_IMAP_HOST` | No | see below | IMAP server |
 | `*_IMAP_PORT` | No | `993` | IMAP port |
 | `*_SMTP_HOST` | No | see below | SMTP server |
 | `*_SMTP_PORT` | No | `465` | SMTP port |
 
-> *Required only when `MAIL_ACCOUNTS` includes `gmail`
+> *Required only when `MAIL_ACCOUNTS` includes the corresponding provider (gmail, 163)
 
 | Provider | IMAP | SMTP | Archive folder | Sent folder |
 |----------|------|------|----------------|-------------|
 | QQ | imap.qq.com | smtp.qq.com | Archives | Sent Messages |
 | Gmail | imap.gmail.com | smtp.gmail.com | [Gmail]/All Mail | [Gmail]/Sent Mail |
+| 163 | imap.163.com | smtp.163.com | Archives | Sent Messages |
 
 </details>
 
