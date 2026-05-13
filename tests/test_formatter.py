@@ -134,7 +134,7 @@ class TestBuildWebLink:
 
     def test_unknown_provider(self):
         msg = _make_email()
-        config = {"account": "outlook", "user": "test@outlook.com"}
+        config = {"account": "yandex", "user": "test@yandex.com"}
         link = build_web_link(config, msg)
         assert link is None
 
@@ -155,6 +155,6 @@ class TestFormatEmailLink:
 
     def test_no_link_for_unknown_provider(self):
         msg = _make_email()
-        config = {"account": "outlook", "user": "test@outlook.com"}
+        config = {"account": "yandex", "user": "test@yandex.com"}
         result = format_email(1, "100", msg, config=config)
         assert "**Link:**" not in result

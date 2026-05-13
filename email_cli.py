@@ -6,6 +6,8 @@ import datetime
 import email as email_lib
 import os
 import re
+import socket as socket_mod
+import ssl
 import sys
 from contextlib import asynccontextmanager
 from email.header import decode_header
@@ -37,8 +39,112 @@ PROVIDER_DEFAULTS = {
         "smtp_port": 465,
         "archive_folder": "[Gmail]/All Mail",
         "sent_folder": "[Gmail]/Sent Mail",
+        "needs_proxy": True,
+    },
+    "163": {
+        "env_prefix": "MAIL163",
+        "imap_host": "imap.163.com",
+        "imap_port": 993,
+        "smtp_host": "smtp.163.com",
+        "smtp_port": 465,
+        "archive_folder": "Archives",
+        "sent_folder": "Sent Messages",
+        "needs_id": True,
+    },
+    "outlook": {
+        "env_prefix": "OUTLOOK",
+        "imap_host": "outlook.office365.com",
+        "imap_port": 993,
+        "smtp_host": "smtp.office365.com",
+        "smtp_port": 587,
+        "smtp_starttls": True,
+        "archive_folder": "Archive",
+        "sent_folder": "Sent",
+        "needs_proxy": True,
+    },
+    "139": {
+        "env_prefix": "MAIL139",
+        "imap_host": "imap.139.com",
+        "imap_port": 993,
+        "smtp_host": "smtp.139.com",
+        "smtp_port": 465,
+        "archive_folder": "Archives",
+        "sent_folder": "Sent Messages",
     },
 }
+
+
+# ── SOCKS5 Proxy ───────────────────────────────
+
+async def _sock_recv_exact(loop, sock, n):
+    """Read exactly n bytes from a non-blocking socket."""
+    buf = b""
+    while len(buf) < n:
+        chunk = await loop.sock_recv(sock, n - len(buf))
+        if not chunk:
+            raise ConnectionError("Connection closed during SOCKS5 handshake")
+        buf += chunk
+    return buf
+
+
+async def _socks5_open(dest_host, dest_port, proxy_host, proxy_port):
+    """Connect to dest_host:dest_port through a SOCKS5 proxy. Returns socket."""
+    sock = socket_mod.socket(socket_mod.AF_INET, socket_mod.SOCK_STREAM)
+    sock.setblocking(False)
+    loop = asyncio.get_event_loop()
+    await loop.sock_connect(sock, (proxy_host, proxy_port))
+
+    # Greeting: version 5, 1 method, no-auth (0x00)
+    await loop.sock_sendall(sock, b"\x05\x01\x00")
+    await _sock_recv_exact(loop, sock, 2)
+
+    # Connect request with domain name
+    host_bytes = dest_host.encode()
+    await loop.sock_sendall(
+        sock,
+        b"\x05\x01\x00\x03"
+        + bytes([len(host_bytes)]) + host_bytes
+        + dest_port.to_bytes(2, "big"),
+    )
+    resp = await _sock_recv_exact(loop, sock, 4)
+    if resp[1] != 0:
+        sock.close()
+        raise ConnectionError(f"SOCKS5 proxy refused: status {resp[1]}")
+
+    # Skip bound address
+    if resp[3] == 1:
+        await _sock_recv_exact(loop, sock, 6)
+    elif resp[3] == 3:
+        n = (await _sock_recv_exact(loop, sock, 1))[0]
+        await _sock_recv_exact(loop, sock, n + 2)
+    elif resp[3] == 4:
+        await _sock_recv_exact(loop, sock, 18)
+
+    return sock
+
+
+class _ProxiedIMAP4_SSL(aioimaplib.IMAP4_SSL):
+    """IMAP4_SSL that tunnels through a SOCKS5 proxy."""
+
+    def __init__(self, host, port, proxy_host, proxy_port, **kwargs):
+        self._proxy_host = proxy_host
+        self._proxy_port = proxy_port
+        super().__init__(host, port, **kwargs)
+
+    def create_client(self, host, port, loop, conn_lost_cb=None, ssl_context=None):
+        if ssl_context is None:
+            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        local_loop = loop or asyncio.get_event_loop()
+        self.protocol = aioimaplib.aioimaplib.IMAP4ClientProtocol(local_loop, conn_lost_cb)
+
+        async def _connect():
+            sock = await _socks5_open(host, port, self._proxy_host, self._proxy_port)
+            await local_loop.create_connection(
+                lambda: self.protocol, sock=sock,
+                ssl=ssl_context, server_hostname=host,
+            )
+
+        self._client_task = local_loop.create_task(_connect())
 
 
 # ── Config ──────────────────────────────────────
@@ -121,16 +227,34 @@ def get_config(account=None):
         "smtp_port": int(os.environ.get(f"{prefix}_SMTP_PORT", str(provider["smtp_port"]))),
         "archive_folder": os.environ.get(f"{prefix}_ARCHIVE_FOLDER", provider["archive_folder"]),
         "sent_folder": os.environ.get(f"{prefix}_SENT_FOLDER", provider.get("sent_folder", "Sent Messages")),
+        "smtp_starttls": provider.get("smtp_starttls", False),
+        "needs_id": provider.get("needs_id", False),
+        "needs_proxy": provider.get("needs_proxy", False),
+        "proxy_host": os.environ.get("SOCKS5_PROXY_HOST", ""),
+        "proxy_port": int(os.environ.get("SOCKS5_PROXY_PORT", "0")),
     }
 
 
 @asynccontextmanager
 async def imap_client(config):
     """Async context manager for IMAP connection."""
-    client = aioimaplib.IMAP4_SSL(config["imap_host"], config["imap_port"])
+    if config.get("needs_proxy") and config.get("proxy_host"):
+        client = _ProxiedIMAP4_SSL(
+            config["imap_host"], config["imap_port"],
+            config["proxy_host"], config["proxy_port"],
+        )
+    else:
+        client = aioimaplib.IMAP4_SSL(config["imap_host"], config["imap_port"])
     try:
         await client.wait_hello_from_server()
         await client.login(config["user"], config["password"])
+        if config.get("needs_id"):
+            from aioimaplib import Commands, Cmd, Exec
+            Commands['ID'] = Cmd(name='ID', valid_states=('AUTH', 'SELECTED'), exec=Exec.is_sync)
+            cmd = aioimaplib.Command('ID', client.protocol.new_tag(),
+                                     '("name" "email_cli" "version" "1.0")',
+                                     loop=asyncio.get_event_loop())
+            await client.protocol.execute(cmd)
         yield client
     except Exception as e:
         print(f"IMAP connection error: {e}", file=sys.stderr)
@@ -171,6 +295,12 @@ def build_web_link(config, msg):
         return "https://mail.google.com/"
     if account == "qq":
         return "https://mail.qq.com/"
+    if account == "outlook":
+        return "https://outlook.live.com/"
+    if account == "163":
+        return "https://mail.163.com/"
+    if account == "139":
+        return "https://mail.10086.cn/"
     return None
 
 
@@ -512,14 +642,42 @@ async def send_email(config, to, subject, body, in_reply_to=None, references=Non
         msg["References"] = references
 
     try:
-        await aiosmtplib.send(
-            msg,
-            hostname=config["smtp_host"],
-            port=config["smtp_port"],
-            username=config["user"],
-            password=config["password"],
-            use_tls=True,
-        )
+        if config.get("needs_proxy") and config.get("proxy_host"):
+            sock = await _socks5_open(
+                config["smtp_host"], config["smtp_port"],
+                config["proxy_host"], config["proxy_port"],
+            )
+            smtp_kwargs = dict(
+                hostname=config["smtp_host"],
+                username=config["user"],
+                password=config["password"],
+                sock=sock,
+            )
+            if config.get("smtp_starttls"):
+                smtp_kwargs.update(use_tls=False, start_tls=True)
+            else:
+                smtp_kwargs.update(use_tls=True)
+            async with aiosmtplib.SMTP(**smtp_kwargs) as smtp:
+                await smtp.send_message(msg)
+        elif config.get("smtp_starttls"):
+            await aiosmtplib.send(
+                msg,
+                hostname=config["smtp_host"],
+                port=config["smtp_port"],
+                username=config["user"],
+                password=config["password"],
+                use_tls=False,
+                start_tls=True,
+            )
+        else:
+            await aiosmtplib.send(
+                msg,
+                hostname=config["smtp_host"],
+                port=config["smtp_port"],
+                username=config["user"],
+                password=config["password"],
+                use_tls=True,
+            )
         print(f"Sent to {to}")
     except Exception as e:
         print(f"Error sending email: {e}", file=sys.stderr)
