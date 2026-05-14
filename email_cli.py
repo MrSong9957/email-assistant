@@ -737,6 +737,44 @@ async def send_email(config, to, subject, body, in_reply_to=None, references=Non
 
 # ── CLI Commands ────────────────────────────────
 
+def cmd_set_persona(args):
+    """Set persona mapping (default or per-recipient)."""
+    if args.default:
+        if args.default not in PERSONAS:
+            print(f"Error: Unknown persona '{args.default}'. Available: {', '.join(PERSONAS.keys())}", file=sys.stderr)
+            sys.exit(1)
+        mapping = load_persona_mapping()
+        mapping["default_persona"] = args.default
+        save_persona_mapping(mapping)
+        print(f"Default persona set to {args.default}")
+    elif args.to:
+        if not args.persona:
+            print("Error: persona key required with --to", file=sys.stderr)
+            sys.exit(1)
+        if args.persona not in PERSONAS:
+            print(f"Error: Unknown persona '{args.persona}'. Available: {', '.join(PERSONAS.keys())}", file=sys.stderr)
+            sys.exit(1)
+        mapping = load_persona_mapping()
+        mapping["recipients"][args.to] = args.persona
+        save_persona_mapping(mapping)
+        print(f"Persona for {args.to} set to {args.persona}")
+    else:
+        print("Error: --default or --to required", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_list_personas(args):
+    """List all personas and current mapping."""
+    mapping = load_persona_mapping()
+    parts = [f'{v["name"]}({k})' for k, v in PERSONAS.items()]
+    print(f"预设人格：{' · '.join(parts)}")
+    print(f"全局默认：{mapping['default_persona']}")
+    if mapping["recipients"]:
+        print("收件人映射：")
+        for email_addr, persona_key in mapping["recipients"].items():
+            print(f"  {email_addr} → {persona_key}")
+
+
 def cmd_list_accounts(args):
     accounts = list_accounts()
     if not accounts:
@@ -911,6 +949,15 @@ def main():
     p = sub.add_parser("mark-read", help="Mark emails as read")
     p.add_argument("--uid", required=True, help="Comma-separated UIDs")
     p.set_defaults(func=cmd_mark_read)
+
+    p = sub.add_parser("set-persona", help="Set persona mapping")
+    p.add_argument("--default", default=None, help="Set global default persona")
+    p.add_argument("--to", default=None, metavar="EMAIL", help="Set persona for a specific recipient")
+    p.add_argument("persona", nargs="?", default=None, help="Persona key (used with --to)")
+    p.set_defaults(func=cmd_set_persona)
+
+    p = sub.add_parser("list-personas", help="List all personas and current mapping")
+    p.set_defaults(func=cmd_list_personas)
 
     args = parser.parse_args()
     args.func(args)

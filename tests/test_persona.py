@@ -1,10 +1,19 @@
+import argparse
 import json
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from email_cli import PERSONAS, load_persona_mapping, save_persona_mapping
+from email_cli import (
+    PERSONAS,
+    cmd_set_persona,
+    cmd_list_personas,
+    load_persona_mapping,
+    save_persona_mapping,
+)
 
 
 class TestPersonas:
@@ -51,3 +60,58 @@ class TestSavePersonaMapping:
         save_persona_mapping({"default_persona": "sarcastic", "recipients": {}})
         result = load_persona_mapping()
         assert result["default_persona"] == "sarcastic"
+
+
+class TestCmdSetPersona:
+    def test_set_default(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        args = argparse.Namespace(default="sarcastic", to=None, persona=None)
+        cmd_set_persona(args)
+        assert "sarcastic" in capsys.readouterr().out
+        mapping = load_persona_mapping()
+        assert mapping["default_persona"] == "sarcastic"
+
+    def test_set_recipient(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        args = argparse.Namespace(default=None, to="a@b.com", persona="romantic")
+        cmd_set_persona(args)
+        mapping = load_persona_mapping()
+        assert mapping["recipients"]["a@b.com"] == "romantic"
+
+    def test_invalid_persona_exits(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        args = argparse.Namespace(default="nonexistent", to=None, persona=None)
+        with pytest.raises(SystemExit):
+            cmd_set_persona(args)
+
+    def test_no_args_exits(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        args = argparse.Namespace(default=None, to=None, persona=None)
+        with pytest.raises(SystemExit):
+            cmd_set_persona(args)
+
+    def test_to_without_persona_exits(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        args = argparse.Namespace(default=None, to="a@b.com", persona=None)
+        with pytest.raises(SystemExit):
+            cmd_set_persona(args)
+
+
+class TestCmdListPersonas:
+    def test_lists_all_persona_keys(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        cmd_list_personas(argparse.Namespace())
+        output = capsys.readouterr().out
+        assert "sarcastic" in output
+        assert "workplace" in output
+        assert "customer" in output
+        assert "romantic" in output
+        assert "全局默认" in output
+
+    def test_shows_recipient_mapping(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        save_persona_mapping({"default_persona": "workplace", "recipients": {"x@y.com": "sarcastic"}})
+        cmd_list_personas(argparse.Namespace())
+        output = capsys.readouterr().out
+        assert "x@y.com" in output
+        assert "收件人映射" in output
