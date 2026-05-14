@@ -2,6 +2,8 @@
 
 A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) / [Codex CLI](https://github.com/openai/codex) / [OpenCode](https://github.com/opencode-ai/opencode) **Skill** that lets you manage your inbox with natural language. Connect QQ Mail and Gmail via IMAP/SMTP — check, reply, forward, and archive emails without leaving your AI conversation.
 
+Just install the skill with a natural language command in your AI tool, then configure your email authorization code in `.env` — that's all you need to get started.
+
 [中文文档](README.zh-CN.md)
 
 ## One-Click Install
@@ -223,7 +225,7 @@ You: Send
 └─────┴───────────────┴──────────────────────┴──────────────────────────────────────────────────────┘
 
 English email appeared in Sent folder at #1. Bilingual display, send & verify flow complete.
-> 💡 `Check unread emails` · `View details 1`
+> 💡 `Check unread emails` · `View email 1 details`
 ```
 
 More scenarios (archiving, mark as read, etc.) in [SKILL.md](SKILL.md).
