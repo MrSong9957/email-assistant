@@ -5,6 +5,7 @@ import asyncio
 import datetime
 import email as email_lib
 import os
+import json
 import re
 import socket as socket_mod
 import ssl
@@ -72,6 +73,51 @@ PROVIDER_DEFAULTS = {
         "sent_folder": "Sent Messages",
     },
 }
+
+
+# ── Persona & Style Config ──────────────────────
+
+SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
+
+PERSONAS = {
+    "sarcastic": {
+        "name": "阴阳损友",
+        "instruction": "尖酸刻薄、反讽互损、用梗密集，但不含真正攻击性",
+        "example": "你可真行，三天不回消息还活着呢？我还以为你被外星人绑架了",
+    },
+    "workplace": {
+        "name": "职场沟通",
+        "instruction": "逻辑清晰、用词精简、结论先行，不带废话",
+        "example": "方案B数据更完整，建议周四前确定，我这边同步排期",
+    },
+    "customer": {
+        "name": "客户回复",
+        "instruction": "热情专业、解答精准，热情但不啰嗦",
+        "example": "收到，这个问题我查了一下，原因是X，解决方案是Y，您试试看，有问题随时找我",
+    },
+    "romantic": {
+        "name": "情侣互动",
+        "instruction": "温暖肉麻、带鼓励、亲昵称呼自然",
+        "example": "宝你今天辛苦了，早点休息，明天的事明天再说，我陪你",
+    },
+}
+
+
+def load_persona_mapping():
+    """Load persona-mapping.json. Returns default structure if not found."""
+    path = os.path.join(SKILL_DIR, "persona-mapping.json")
+    if not os.path.isfile(path):
+        return {"default_persona": "workplace", "recipients": {}}
+    with open(path) as f:
+        return json.load(f)
+
+
+def save_persona_mapping(mapping):
+    """Save persona-mapping.json."""
+    path = os.path.join(SKILL_DIR, "persona-mapping.json")
+    with open(path, "w") as f:
+        json.dump(mapping, f, ensure_ascii=False, indent=2)
+        f.write("\n")
 
 
 # ── SOCKS5 Proxy ───────────────────────────────
