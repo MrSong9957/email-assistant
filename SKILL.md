@@ -331,6 +331,70 @@ python ~/.claude/skills/email-assistant/email_cli.py folders
 python ~/.claude/skills/email-assistant/email_cli.py mark-read --uid <UID1,UID2,...>
 ```
 
+## 人格化回复
+
+### 风格分析
+
+当用户说"上传我的聊天记录学习一下说话风格"或类似请求时：
+
+1. 读取用户提供的文件（微信导出、聊天记录 txt、词库 txt、Markdown 均可）
+2. 从文件中提炼：口语习惯、句式特点、常用词、情绪表达方式、口头禅
+3. 输出 summary（文字描述）和 scenarios（带场景标签的示例句）
+4. 调用 `style-profile save` 写入
+5. 展示提炼结果，用户确认或要求修改
+
+### 预设人格
+
+| 人格 | key | 核心指令 | 示例 |
+|------|-----|---------|------|
+| 阴阳损友 | `sarcastic` | 尖酸刻薄、反讽互损、用梗密集，但不含真正攻击性 | "你可真行，三天不回消息还活着呢？我还以为你被外星人绑架了" |
+| 职场沟通 | `workplace` | 逻辑清晰、用词精简、结论先行，不带废话 | "方案B数据更完整，建议周四前确定，我这边同步排期" |
+| 客户回复 | `customer` | 热情专业、解答精准，热情但不啰嗦 | "收到，这个问题我查了一下，原因是X，解决方案是Y，您试试看，有问题随时找我" |
+| 情侣互动 | `romantic` | 温暖肉麻、带鼓励、亲昵称呼自然 | "宝你今天辛苦了，早点休息，明天的事明天再说，我陪你" |
+
+### 优先级
+
+```
+style-profile（用户真实风格）> 预设人格指令 > 邮件上下文
+```
+
+用户真实风格和预设人格冲突时，以风格摘要为准，人格指令仅做方向性微调。不能让平时说"嗯、行、差不多"的人突然写出排比句和书面语。
+
+### 回复生成流程
+
+1. 用户说"回复第 N 封" → 查收件人 → 查 persona-mapping → 确定人格
+2. 读取 style-profile → 结合人格指令 + 风格摘要生成回复
+3. 风格摘要中有匹配场景时，优先模仿该句式的节奏和用词
+4. 展示给用户确认，标注使用的人格：[损友模式]
+5. 确认后发送
+
+**特殊情况：**
+- 收件人不在 mapping 中 → 提示用户选择人格
+- style-profile 不存在 → 温和提示可上传聊天记录
+- 用户临时指定人格 → 本次覆盖使用，不动 mapping
+
+### 管理命令
+
+```bash
+# 查看当前风格摘要
+python ~/.claude/skills/email-assistant/email_cli.py style-profile show
+
+# 清除风格摘要
+python ~/.claude/skills/email-assistant/email_cli.py style-profile clear
+
+# 写入风格摘要（AI 调用）
+python ~/.claude/skills/email-assistant/email_cli.py style-profile save --summary "..." --scenarios '[...]'
+
+# 设置全局默认人格
+python ~/.claude/skills/email-assistant/email_cli.py set-persona --default workplace
+
+# 设置特定收件人的人格
+python ~/.claude/skills/email-assistant/email_cli.py set-persona --to zhangsan@qq.com sarcastic
+
+# 列出所有人格和当前映射
+python ~/.claude/skills/email-assistant/email_cli.py list-personas
+```
+
 ## 安全约束
 
 1. **发送前必须确认** — 回复、转发、新邮件发送前，必须向用户展示完整内容并获确认
