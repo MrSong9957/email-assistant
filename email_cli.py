@@ -120,6 +120,37 @@ def save_persona_mapping(mapping):
         f.write("\n")
 
 
+def load_style_profile():
+    """Load style-profile.json. Returns None if not found."""
+    path = os.path.join(SKILL_DIR, "style-profile.json")
+    if not os.path.isfile(path):
+        return None
+    with open(path) as f:
+        return json.load(f)
+
+
+def save_style_profile(summary, scenarios, source_files=None):
+    """Save style-profile.json."""
+    path = os.path.join(SKILL_DIR, "style-profile.json")
+    profile = {
+        "version": 1,
+        "created": datetime.date.today().isoformat(),
+        "source_files": source_files or [],
+        "summary": summary,
+        "scenarios": scenarios,
+    }
+    with open(path, "w") as f:
+        json.dump(profile, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
+def clear_style_profile():
+    """Delete style-profile.json."""
+    path = os.path.join(SKILL_DIR, "style-profile.json")
+    if os.path.isfile(path):
+        os.remove(path)
+
+
 # ── SOCKS5 Proxy ───────────────────────────────
 
 async def _sock_recv_exact(loop, sock, n):
