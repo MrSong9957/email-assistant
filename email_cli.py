@@ -806,6 +806,29 @@ def cmd_list_personas(args):
             print(f"  {email_addr} → {persona_key}")
 
 
+def cmd_style_profile_show(args):
+    """Show current style profile."""
+    profile = load_style_profile()
+    if profile is None:
+        print("No style profile found.")
+        return
+    print(json.dumps(profile, ensure_ascii=False, indent=2))
+
+
+def cmd_style_profile_clear(args):
+    """Clear style profile."""
+    clear_style_profile()
+    print("Style profile cleared.")
+
+
+def cmd_style_profile_save(args):
+    """Save style profile (called by AI, not user directly)."""
+    scenarios = json.loads(args.scenarios)
+    source_files = json.loads(args.source_files) if args.source_files else []
+    save_style_profile(args.summary, scenarios, source_files)
+    print("Style profile saved.")
+
+
 def cmd_list_accounts(args):
     accounts = list_accounts()
     if not accounts:
@@ -989,6 +1012,21 @@ def main():
 
     p = sub.add_parser("list-personas", help="List all personas and current mapping")
     p.set_defaults(func=cmd_list_personas)
+
+    p = sub.add_parser("style-profile", help="Manage style profile")
+    sp = p.add_subparsers(dest="style_action", required=True)
+
+    sp_show = sp.add_parser("show", help="Show current style profile")
+    sp_show.set_defaults(func=cmd_style_profile_show)
+
+    sp_clear = sp.add_parser("clear", help="Clear style profile")
+    sp_clear.set_defaults(func=cmd_style_profile_clear)
+
+    sp_save = sp.add_parser("save", help="Save style profile (AI-called)")
+    sp_save.add_argument("--summary", required=True, help="Style summary text")
+    sp_save.add_argument("--scenarios", required=True, help="JSON array of {context, example}")
+    sp_save.add_argument("--source-files", default=None, help="JSON array of source filenames")
+    sp_save.set_defaults(func=cmd_style_profile_save)
 
     args = parser.parse_args()
     args.func(args)
