@@ -3,6 +3,8 @@ import json
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from email_cli import (
@@ -114,3 +116,15 @@ class TestCmdStyleProfileSave:
         cmd_style_profile_save(args)
         profile = load_style_profile()
         assert profile["source_files"] == []
+
+    def test_save_invalid_scenarios_json(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        args = argparse.Namespace(summary="test", scenarios="not json", source_files=None)
+        with pytest.raises(SystemExit):
+            cmd_style_profile_save(args)
+
+    def test_save_invalid_source_files_json(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        args = argparse.Namespace(summary="test", scenarios="[]", source_files="bad")
+        with pytest.raises(SystemExit):
+            cmd_style_profile_save(args)

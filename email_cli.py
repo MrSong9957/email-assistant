@@ -4,8 +4,8 @@ import argparse
 import asyncio
 import datetime
 import email as email_lib
-import os
 import json
+import os
 import re
 import socket as socket_mod
 import ssl
@@ -823,8 +823,16 @@ def cmd_style_profile_clear(args):
 
 def cmd_style_profile_save(args):
     """Save style profile (called by AI, not user directly)."""
-    scenarios = json.loads(args.scenarios)
-    source_files = json.loads(args.source_files) if args.source_files else []
+    try:
+        scenarios = json.loads(args.scenarios)
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON in --scenarios: {e}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        source_files = json.loads(args.source_files) if args.source_files else []
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON in --source-files: {e}", file=sys.stderr)
+        sys.exit(1)
     save_style_profile(args.summary, scenarios, source_files)
     print("Style profile saved.")
 
