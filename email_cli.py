@@ -825,8 +825,11 @@ def cmd_set_persona(args):
 def cmd_list_personas(args):
     """List all personas and current mapping."""
     mapping = load_persona_mapping()
-    parts = [f'{v["name"]}({k})' for k, v in PERSONAS.items()]
-    print(f"预设人格：{' · '.join(parts)}")
+    settings = mapping.get("persona_settings", DEFAULT_PERSONA_SETTINGS)
+    for key, persona in PERSONAS.items():
+        toggle = settings.get(key, {}).get("use_style_profile", True)
+        icon = "✅" if toggle else "❌"
+        print(f"  {persona['name']}({key})      词库: {icon}")
     print(f"全局默认：{mapping['default_persona']}")
     if mapping["recipients"]:
         print("收件人映射：")

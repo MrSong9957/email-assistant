@@ -181,3 +181,20 @@ class TestPersonaSettings:
         args = argparse.Namespace(default=None, to=None, persona=None, style_profile=("nonexistent", "on"))
         with pytest.raises(SystemExit):
             cmd_set_persona(args)
+
+    def test_list_personas_shows_toggle_state(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        cmd_list_personas(argparse.Namespace())
+        output = capsys.readouterr().out
+        assert "词库" in output
+
+    def test_list_personas_shows_correct_toggle(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        mapping = load_persona_mapping()
+        mapping["persona_settings"]["workplace"]["use_style_profile"] = True
+        save_persona_mapping(mapping)
+        cmd_list_personas(argparse.Namespace())
+        output = capsys.readouterr().out
+        lines = output.split("\n")
+        workplace_line = [l for l in lines if "workplace" in l][0]
+        assert "✅" in workplace_line
