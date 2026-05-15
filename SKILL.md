@@ -212,7 +212,7 @@ python ~/.claude/skills/email-assistant/email_cli.py mark-read --uid <UID1,UID2,
 
 1. 从上下文中取出对应邮件的 UID
 2. 根据用户意图组织回复内容
-3. **向用户展示将要发送的内容**并确认
+3. **向用户展示将要发送的内容**并确认（展示中标注使用的人格，见下方规则）
 4. 确认后执行：
 
 ```bash
@@ -252,7 +252,7 @@ python ~/.claude/skills/email-assistant/email_cli.py mark-read --uid <UID>
 当用户说"给xxx发邮件"时：
 
 1. 确认收件人、主题、正文
-2. **向用户展示完整邮件内容**并确认
+2. **向用户展示完整邮件内容**并确认（展示中标注使用的人格，见下方规则）
 3. 确认后执行：
 
 ```bash
@@ -268,6 +268,8 @@ python ~/.claude/skills/email-assistant/email_cli.py send --to "recipient@exampl
 ```
 📧 即将发送的内容：
 
+> **🎭 人格：** 阴阳损友（收件人专属）
+>
 > **中文大意：**
 > （中文概述）
 >
@@ -278,6 +280,22 @@ python ~/.claude/skills/email-assistant/email_cli.py send --to "recipient@exampl
 ```
 
 只在外语撰写时生效，中文邮件保持原有展示。
+
+### 人格标注规则
+
+回复/发新邮件的确认展示中，在邮件正文前标注使用的人格：
+
+```
+🎭 阴阳损友（收件人专属）
+
+> 邮件正文...
+```
+
+- 收件人有专属人格 → `🎭 阴阳损友（收件人专属）`
+- 使用全局默认 workplace → 不标注，避免噪音
+- 用户临时指定人格 → `🎭 阴阳损友（本次临时）`
+- 双语邮件使用 `**🎭 人格：**` 加粗格式
+- 词库关闭时标注 `🎭 职场沟通（收件人专属）· 词库关闭`
 
 ### 发送后验证
 
@@ -356,17 +374,22 @@ python ~/.claude/skills/email-assistant/email_cli.py mark-read --uid <UID1,UID2,
 
 ```
 style-profile（用户真实风格）> 预设人格指令 > 邮件上下文
+（仅当人格的词库开关为 on 时 style-profile 生效）
 ```
 
 用户真实风格和预设人格冲突时，以风格摘要为准，人格指令仅做方向性微调。不能让平时说"嗯、行、差不多"的人突然写出排比句和书面语。
 
+当人格的词库开关为 off 时，禁止读取 style-profile（包括 CLI 命令和直接读文件），仅使用人格指令生成内容。
+
 ### 回复生成流程
 
 1. 用户说"回复第 N 封" → 查收件人 → 查 persona-mapping → 确定人格
-2. 读取 style-profile → 结合人格指令 + 风格摘要生成回复
-3. 风格摘要中有匹配场景时，优先模仿该句式的节奏和用词
-4. 展示给用户确认，标注使用的人格：[损友模式]
-5. 确认后发送
+2. 用 `list-personas` 检查该人格的词库开关状态
+3. 开关为 on → 读取 style-profile → 结合人格指令 + 风格摘要生成回复
+4. 开关为 off → 跳过 style-profile → 仅使用人格指令生成回复
+5. 风格摘要中有匹配场景时，优先模仿该句式的节奏和用词
+6. 展示给用户确认，标注使用的人格和词库状态
+7. 确认后发送
 
 **特殊情况：**
 - 收件人不在 mapping 中 → 提示用户选择人格
@@ -393,6 +416,10 @@ python ~/.claude/skills/email-assistant/email_cli.py set-persona --to zhangsan@q
 
 # 列出所有人格和当前映射
 python ~/.claude/skills/email-assistant/email_cli.py list-personas
+
+# 切换人格的词库开关
+python ~/.claude/skills/email-assistant/email_cli.py set-persona --style-profile workplace off
+python ~/.claude/skills/email-assistant/email_cli.py set-persona --style-profile sarcastic on
 ```
 
 ## 安全约束
@@ -503,6 +530,8 @@ python ~/.claude/skills/email-assistant/email_cli.py list-personas
 助手：好的，准备回复。邮件内容如下：
 
 ```
+🎭 职场沟通
+
 > Re: Gmail SMTP 测试
 >
 > 收到，SMTP 连接正常。这是一封测试回复。
@@ -543,6 +572,8 @@ python ~/.claude/skills/email-assistant/email_cli.py list-personas
 ```
 📧 即将发送的内容：
 
+> **🎭 人格：** 阴阳损友（收件人专属）
+>
 > **中文大意：**
 > 达康你好，谢谢你回复我消息的闪电般的速度。真的，你能在 48 小时内
 > 看完一条消息，这种效率简直让人叹为观止。下次见面我一定要请教你
