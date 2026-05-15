@@ -102,14 +102,28 @@ PERSONAS = {
     },
 }
 
+DEFAULT_PERSONA_SETTINGS = {
+    "sarcastic": {"use_style_profile": True},
+    "workplace": {"use_style_profile": False},
+    "customer": {"use_style_profile": False},
+    "romantic": {"use_style_profile": True},
+}
+
 
 def load_persona_mapping():
     """Load persona-mapping.json. Returns default structure if not found."""
     path = os.path.join(SKILL_DIR, "persona-mapping.json")
     if not os.path.isfile(path):
-        return {"default_persona": "workplace", "recipients": {}}
+        return {
+            "default_persona": "workplace",
+            "recipients": {},
+            "persona_settings": json.loads(json.dumps(DEFAULT_PERSONA_SETTINGS)),
+        }
     with open(path) as f:
-        return json.load(f)
+        data = json.load(f)
+    if "persona_settings" not in data:
+        data["persona_settings"] = json.loads(json.dumps(DEFAULT_PERSONA_SETTINGS))
+    return data
 
 
 def save_persona_mapping(mapping):

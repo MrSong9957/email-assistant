@@ -8,6 +8,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from email_cli import (
+    DEFAULT_PERSONA_SETTINGS,
     PERSONAS,
     cmd_set_persona,
     cmd_list_personas,
@@ -31,14 +32,18 @@ class TestLoadPersonaMapping:
     def test_returns_default_when_no_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
         result = load_persona_mapping()
-        assert result == {"default_persona": "workplace", "recipients": {}}
+        assert result["default_persona"] == "workplace"
+        assert result["recipients"] == {}
+        assert result["persona_settings"] == DEFAULT_PERSONA_SETTINGS
 
     def test_loads_existing_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
         data = {"default_persona": "sarcastic", "recipients": {"a@b.com": "romantic"}}
         (tmp_path / "persona-mapping.json").write_text(json.dumps(data))
         result = load_persona_mapping()
-        assert result == data
+        assert result["default_persona"] == "sarcastic"
+        assert result["recipients"] == {"a@b.com": "romantic"}
+        assert "persona_settings" in result
 
 
 class TestSavePersonaMapping:
@@ -47,7 +52,8 @@ class TestSavePersonaMapping:
         data = {"default_persona": "customer", "recipients": {"x@y.com": "workplace"}}
         save_persona_mapping(data)
         loaded = load_persona_mapping()
-        assert loaded == data
+        assert loaded["default_persona"] == "customer"
+        assert loaded["recipients"] == {"x@y.com": "workplace"}
 
     def test_save_creates_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
@@ -115,3 +121,35 @@ class TestCmdListPersonas:
         output = capsys.readouterr().out
         assert "x@y.com" in output
         assert "收件人映射" in output
+
+
+class TestPersonaSettings:
+    def test_default_settings_initialized_on_load(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        result = load_persona_mapping()
+        settings = result["persona_settings"]
+        assert settings["workplace"]["use_style_profile"] is False
+        assert settings["customer"]["use_style_profile"] is False
+        assert settings["sarcastic"]["use_style_profile"] is True
+        assert settings["romantic"]["use_style_profile"] is True
+
+    def test_existing_mapping_keeps_settings(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        data = {
+            "default_persona": "workplace",
+            "recipients": {},
+            "persona_settings": {
+                "workplace": {"use_style_profile": True},
+            },
+        }
+        (tmp_path / "persona-mapping.json").write_text(json.dumps(data))
+        result = load_persona_mapping()
+        assert result["persona_settings"]["workplace"]["use_style_profile"] is True
+
+    def test_missing_settings_key_gets_initialized(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        data = {"default_persona": "workplace", "recipients": {}}
+        (tmp_path / "persona-mapping.json").write_text(json.dumps(data))
+        result = load_persona_mapping()
+        assert "persona_settings" in result
+        assert result["persona_settings"]["workplace"]["use_style_profile"] is False
