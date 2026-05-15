@@ -784,7 +784,21 @@ async def send_email(config, to, subject, body, in_reply_to=None, references=Non
 
 def cmd_set_persona(args):
     """Set persona mapping (default or per-recipient)."""
-    if args.default:
+    if getattr(args, "style_profile", None):
+        persona_key, value = args.style_profile
+        if persona_key not in PERSONAS:
+            print(f"Error: Unknown persona '{persona_key}'. Available: {', '.join(PERSONAS.keys())}", file=sys.stderr)
+            sys.exit(1)
+        if value not in ("on", "off"):
+            print(f"Error: Invalid value '{value}'. Use 'on' or 'off'.", file=sys.stderr)
+            sys.exit(1)
+        mapping = load_persona_mapping()
+        if "persona_settings" not in mapping:
+            mapping["persona_settings"] = json.loads(json.dumps(DEFAULT_PERSONA_SETTINGS))
+        mapping["persona_settings"][persona_key] = {"use_style_profile": value == "on"}
+        save_persona_mapping(mapping)
+        print(f"Style profile for persona '{persona_key}' set to {value}")
+    elif args.default:
         if args.default not in PERSONAS:
             print(f"Error: Unknown persona '{args.default}'. Available: {', '.join(PERSONAS.keys())}", file=sys.stderr)
             sys.exit(1)
@@ -804,7 +818,7 @@ def cmd_set_persona(args):
         save_persona_mapping(mapping)
         print(f"Persona for {args.to} set to {args.persona}")
     else:
-        print("Error: --default or --to required", file=sys.stderr)
+        print("Error: --default, --to, or --style-profile required", file=sys.stderr)
         sys.exit(1)
 
 
@@ -1029,6 +1043,8 @@ def main():
     p = sub.add_parser("set-persona", help="Set persona mapping")
     p.add_argument("--default", default=None, help="Set global default persona")
     p.add_argument("--to", default=None, metavar="EMAIL", help="Set persona for a specific recipient")
+    p.add_argument("--style-profile", nargs=2, metavar=("PERSONA", "ON_OFF"),
+                    help="Toggle style profile for a persona (on/off)")
     p.add_argument("persona", nargs="?", default=None, help="Persona key (used with --to)")
     p.set_defaults(func=cmd_set_persona)
 

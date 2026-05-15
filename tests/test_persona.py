@@ -153,3 +153,31 @@ class TestPersonaSettings:
         result = load_persona_mapping()
         assert "persona_settings" in result
         assert result["persona_settings"]["workplace"]["use_style_profile"] is False
+
+    def test_set_style_profile_on(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        args = argparse.Namespace(default=None, to=None, persona=None, style_profile=("workplace", "on"))
+        cmd_set_persona(args)
+        output = capsys.readouterr().out
+        assert "Style profile for persona 'workplace' set to on" in output
+        mapping = load_persona_mapping()
+        assert mapping["persona_settings"]["workplace"]["use_style_profile"] is True
+
+    def test_set_style_profile_off(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        args = argparse.Namespace(default=None, to=None, persona=None, style_profile=("sarcastic", "off"))
+        cmd_set_persona(args)
+        mapping = load_persona_mapping()
+        assert mapping["persona_settings"]["sarcastic"]["use_style_profile"] is False
+
+    def test_set_style_profile_invalid_value(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        args = argparse.Namespace(default=None, to=None, persona=None, style_profile=("workplace", "maybe"))
+        with pytest.raises(SystemExit):
+            cmd_set_persona(args)
+
+    def test_set_style_profile_invalid_persona(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        args = argparse.Namespace(default=None, to=None, persona=None, style_profile=("nonexistent", "on"))
+        with pytest.raises(SystemExit):
+            cmd_set_persona(args)
