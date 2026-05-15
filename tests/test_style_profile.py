@@ -71,13 +71,21 @@ class TestClearStyleProfile:
 
 
 class TestCmdStyleProfileShow:
+    def _setup_persona_enabled(self, tmp_path):
+        """Write a persona-mapping with style profile enabled for default persona."""
+        mapping = {"default_persona": "test", "recipients": {},
+                   "persona_settings": {"test": {"use_style_profile": True}}}
+        (tmp_path / "persona-mapping.json").write_text(json.dumps(mapping))
+
     def test_show_no_profile(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        self._setup_persona_enabled(tmp_path)
         cmd_style_profile_show(argparse.Namespace())
         assert "No style profile found" in capsys.readouterr().out
 
     def test_show_existing_profile(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        self._setup_persona_enabled(tmp_path)
         save_style_profile("test summary", [{"context": "闲聊", "example": "嗯"}])
         cmd_style_profile_show(argparse.Namespace())
         output = capsys.readouterr().out
@@ -128,3 +136,35 @@ class TestCmdStyleProfileSave:
         args = argparse.Namespace(summary="test", scenarios="[]", source_files="bad")
         with pytest.raises(SystemExit):
             cmd_style_profile_save(args)
+
+class TestStyleProfileShowToggle:
+    def test_show_blocked_when_persona_disabled(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        save_style_profile("test summary", [])
+        mapping = {"default_persona": "workplace", "recipients": {},
+                   "persona_settings": {"workplace": {"use_style_profile": False}}}
+        (tmp_path / "persona-mapping.json").write_text(json.dumps(mapping))
+        cmd_style_profile_show(argparse.Namespace())
+        output = capsys.readouterr().out
+        assert "disabled" in output.lower()
+        assert "workplace" in output
+        assert "test summary" not in output
+
+    def test_show_allowed_when_persona_enabled(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        save_style_profile("test summary", [])
+        mapping = {"default_persona": "sarcastic", "recipients": {},
+                   "persona_settings": {"sarcastic": {"use_style_profile": True}}}
+        (tmp_path / "persona-mapping.json").write_text(json.dumps(mapping))
+        cmd_style_profile_show(argparse.Namespace())
+        output = capsys.readouterr().out
+        assert "test summary" in output
+
+    def test_show_allowed_when_no_settings(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr("email_cli.SKILL_DIR", str(tmp_path))
+        save_style_profile("test summary", [])
+        mapping = {"default_persona": "sarcastic", "recipients": {}}
+        (tmp_path / "persona-mapping.json").write_text(json.dumps(mapping))
+        cmd_style_profile_show(argparse.Namespace())
+        output = capsys.readouterr().out
+        assert "test summary" in output

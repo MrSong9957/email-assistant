@@ -839,6 +839,13 @@ def cmd_list_personas(args):
 
 def cmd_style_profile_show(args):
     """Show current style profile."""
+    mapping = load_persona_mapping()
+    default_persona = mapping["default_persona"]
+    settings = mapping.get("persona_settings", DEFAULT_PERSONA_SETTINGS)
+    use_sp = settings.get(default_persona, {}).get("use_style_profile", True)
+    if not use_sp:
+        print(f"Style profile disabled for current persona: {default_persona}")
+        return
     profile = load_style_profile()
     if profile is None:
         print("No style profile found.")
