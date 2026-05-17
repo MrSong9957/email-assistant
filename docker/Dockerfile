@@ -1,4 +1,4 @@
-FROM s7620605/dev-base:latest
+FROM s7620605/claude-code-opencode:latest
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY

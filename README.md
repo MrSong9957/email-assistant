@@ -228,6 +228,87 @@ English email appeared in Sent folder at #1. Bilingual display, send & verify fl
 > 💡 `Check unread emails` · `View email 1 details`
 ```
 
+### Personas & Style Profiles
+
+Email Assistant can adopt different **personas** when writing emails — pick from 4 presets (sarcastic, workplace, customer, romantic) and map them to specific recipients. Each persona shapes the tone and wording of your replies.
+
+**Style profile** learns your personal writing patterns (catchphrases, slang, habits) from chat logs and blends them into emails. The **style toggle** controls whether the style profile is active for a given persona — formal personas like "workplace" and "customer" disable it by default to keep things professional.
+
+Quick commands:
+- `给 <收件人> 配 <人格名>` — map a persona to a recipient
+- `查看人格列表` / `list-personas` — see all personas and mappings
+- `set-persona <recipient> --style-profile on/off` — toggle style per persona
+
+### Persona-Based Reply
+
+```
+You: Configure sarcastic persona for Dakang, send him an email
+
+Dakang mapped to sarcastic persona. Style toggle: ✅ ON.
+
+🎭 Sarcastic (recipient-specific) · Style ON
+
+📧 Email to be sent:
+
+> **Persona:** 🎭 Sarcastic (recipient-specific)
+> **To:** 742890757@qq.com
+> **Subject:** Long time no see (didn't miss you)
+>
+> Dakang,
+>
+> Is it possible you forgot I exist? A salted fish with zero dreams
+> somehow still breathing — impressive, truly. I'm literally initiating
+> contact with a salted fish. Numb.
+> Anyway, keep being a salted fish. Nobody does shameless like you.
+>
+> — Someone with more dreams than you
+
+Confirm send?
+```
+
+### Style Toggle Comparison
+
+```
+You: Configure workplace persona for Dakang, send him an email
+
+🎭 Workplace (recipient-specific) · Style OFF
+
+📧 Email to be sent:
+
+> **Persona:** 🎭 Workplace (recipient-specific) · Style OFF
+> **To:** 742890757@qq.com
+> **Subject:** Project Update — Email Assistant Iteration Progress
+>
+> Dakang,
+>
+> Quick update on recent email assistant features:
+>
+> Completed:
+> - Persona-based replies: 4 preset personas, auto-matched per recipient
+> - Style profile: Extract personal writing patterns from chat logs
+> - Style toggle: Per-persona control, auto-disabled for formal contexts
+>
+> Let me know if you have suggestions or need adjustments.
+>
+> Song
+
+Confirm send?
+```
+
+### Persona Management
+
+```
+You: List all personas
+
+  Sarcastic(sarcastic)        Style: ✅
+  Workplace(workplace)        Style: ❌
+  Customer(customer)          Style: ❌
+  Romantic(romantic)          Style: ✅
+Default: workplace
+Recipient mapping:
+  742890757@qq.com → sarcastic
+```
+
 More scenarios (archiving, mark as read, etc.) in [SKILL.md](SKILL.md).
 
 ## Features
@@ -240,6 +321,9 @@ More scenarios (archiving, mark as read, etc.) in [SKILL.md](SKILL.md).
 - **HTML forwarding** — Preserves original HTML formatting
 - **Send verification** — Auto-verifies sent mail appears in Sent folder
 - **Bilingual display** — Shows Chinese summary + foreign-language body before sending
+- **Personas** — 4 preset personas (sarcastic / workplace / customer / romantic), per-recipient mapping
+- **Style profile** — Learns your writing style from chat logs, auto-applies to emails
+- **Style toggle** — Per-persona switch to control whether style profile is used (formal personas block memes)
 
 ## Traditional Install
 

@@ -353,13 +353,11 @@ python ~/.claude/skills/email-assistant/email_cli.py mark-read --uid <UID1,UID2,
 
 ### 风格分析
 
-当用户说"上传我的聊天记录学习一下说话风格"或类似请求时：
+当用户希望 AI 从文件学习其说话风格时（如提供聊天记录文件路径、要求分析语气等）：
 
-1. 读取用户提供的文件（微信导出、聊天记录 txt、词库 txt、Markdown 均可）
-2. 从文件中提炼：口语习惯、句式特点、常用词、情绪表达方式、口头禅
-3. 输出 summary（文字描述）和 scenarios（带场景标签的示例句）
-4. 调用 `style-profile save` 写入
-5. 展示提炼结果，用户确认或要求修改
+1. 读取用户指定路径的文件（微信导出、聊天记录、Markdown 等任意文本均可）
+2. 提炼口语习惯、句式特点、常用词、情绪表达、口头禅，构造 summary 和 scenarios
+3. 调用 `style-profile save` 直接写入，展示提炼结果
 
 ### 预设人格
 

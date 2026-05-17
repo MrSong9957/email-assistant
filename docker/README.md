@@ -1,6 +1,6 @@
 # Docker 开发容器
 
-基于共享基础镜像 `s7620605/dev-base` 的隔离开发环境，通过 .env 配置使用智谱 AI。
+基于共享基础镜像 `s7620605/claude-code-opencode` 的隔离开发环境，通过 .env 配置使用智谱 AI。
 
 ## 架构
 
