@@ -143,7 +143,7 @@ def load_style_profile():
         return json.load(f)
 
 
-def save_style_profile(summary, scenarios, source_files=None):
+def save_style_profile(summary, scenarios, source_files=None, catchphrases=None):
     """Save style-profile.json."""
     path = os.path.join(SKILL_DIR, "style-profile.json")
     profile = {
@@ -152,6 +152,7 @@ def save_style_profile(summary, scenarios, source_files=None):
         "source_files": source_files or [],
         "summary": summary,
         "scenarios": scenarios,
+        "catchphrases": catchphrases or [],
     }
     with open(path, "w") as f:
         json.dump(profile, f, ensure_ascii=False, indent=2)
@@ -871,7 +872,12 @@ def cmd_style_profile_save(args):
     except json.JSONDecodeError as e:
         print(f"Error: Invalid JSON in --source-files: {e}", file=sys.stderr)
         sys.exit(1)
-    save_style_profile(args.summary, scenarios, source_files)
+    try:
+        catchphrases = json.loads(args.catchphrases) if args.catchphrases else []
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON in --catchphrases: {e}", file=sys.stderr)
+        sys.exit(1)
+    save_style_profile(args.summary, scenarios, source_files, catchphrases)
     print("Style profile saved.")
 
 
@@ -1074,6 +1080,7 @@ def main():
     sp_save.add_argument("--summary", required=True, help="Style summary text")
     sp_save.add_argument("--scenarios", required=True, help="JSON array of {context, example}")
     sp_save.add_argument("--source-files", default=None, help="JSON array of source filenames")
+    sp_save.add_argument("--catchphrases", default=None, help="JSON array of catchphrases/quotes")
     sp_save.set_defaults(func=cmd_style_profile_save)
 
     args = parser.parse_args()
